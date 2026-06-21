@@ -56,6 +56,7 @@ Usage:
   godogen-ddm asset image|texture|video|glb|rig|retarget|resume|set_budget ...
   godogen-ddm smoke
   godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
+  godogen-ddm verify [--out <dir>] [--skip-tests] [--skip-smoke] [--skip-external-smoke]
 EOF
 }
 
@@ -292,6 +293,116 @@ cmd_smoke() {
     cmd_godot_csharp_smoke "$tmp"
 
     printf 'smoke: ok (%s)\n' "$tmp"
+}
+
+cmd_verify() {
+    local out=""
+    local skip_tests=0
+    local skip_smoke=0
+    local skip_external_smoke=0
+    local provider_dir
+    local engine
+    local agent
+    local target
+    local probe_json
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --out)
+                if [ $# -lt 2 ]; then
+                    echo "error: --out requires a directory" >&2
+                    return 1
+                fi
+                out="$2"
+                shift 2
+                ;;
+            --skip-tests) skip_tests=1; shift ;;
+            --skip-smoke) skip_smoke=1; shift ;;
+            --skip-external-smoke) skip_external_smoke=1; shift ;;
+            -h|--help)
+                cat >&2 <<'EOF'
+Usage:
+  godogen-ddm verify [--out <dir>] [--skip-tests] [--skip-smoke] [--skip-external-smoke]
+
+Runs the reusable DDM fork verification set from the Godogen source repo:
+unit tests, shell syntax checks, Python bytecode checks, publish/runtime matrix,
+source smoke, and non-paid external provider dry-run smoke.
+EOF
+                return 0
+                ;;
+            *)
+                echo "error: unknown verify option: $1" >&2
+                return 1
+                ;;
+        esac
+    done
+
+    if [ ! -x "$ROOT/publish.sh" ]; then
+        echo "error: verify is only available from the Godogen source repo wrapper" >&2
+        return 1
+    fi
+    if [ -z "$ASSET_GEN" ]; then
+        echo "error: could not locate godogen asset_gen.py from $ROOT" >&2
+        return 1
+    fi
+
+    if [ -z "$out" ]; then
+        out="$(mktemp -d /tmp/godogen-ddm-verify.XXXXXX)"
+    fi
+    mkdir -p "$out"
+
+    if [ "$skip_tests" -eq 0 ]; then
+        python3 -m unittest "$ROOT/tests/test_asset_gen_providers.py" "$ROOT/tests/test_godogen_ddm_cli.py"
+        printf 'verify: tests ok\n'
+    fi
+
+    /bin/bash -n "$SELF"
+    /bin/bash -n "$ROOT/publish.sh"
+    printf 'verify: syntax ok\n'
+
+    provider_dir="$(dirname "$ASSET_GEN")/providers"
+    python3 -m py_compile "$ASSET_GEN" "$provider_dir"/*.py \
+        "$ROOT/tests/test_asset_gen_providers.py" "$ROOT/tests/test_godogen_ddm_cli.py"
+    printf 'verify: py_compile ok\n'
+
+    probe_json="$out/runtime-probe.json"
+    for engine in godot bevy babylon; do
+        for agent in codex claude; do
+            target="$out/$engine-$agent"
+            "$ROOT/publish.sh" --engine "$engine" --agent "$agent" --out "$target" --force >/dev/null
+            test -x "$target/tools/godogen-ddm"
+            "$target/tools/godogen-ddm" asset texture \
+                --prompt "runtime verify probe" \
+                --procedural-kind checker \
+                -o "$target/assets/img/probe.png" > "$probe_json"
+            python3 - "$probe_json" "$target/assets/img/probe.png" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+if payload.get("ok") is not True:
+    raise SystemExit(payload)
+if payload.get("provider") != "procedural":
+    raise SystemExit(payload)
+if Path(sys.argv[2]).read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
+    raise SystemExit("runtime probe was not a PNG")
+PY
+        done
+    done
+    printf 'verify: publish-runtime-matrix ok (%s)\n' "$out"
+
+    if [ "$skip_smoke" -eq 0 ]; then
+        "$SELF" smoke
+        printf 'verify: smoke ok\n'
+    fi
+
+    if [ "$skip_external_smoke" -eq 0 ]; then
+        "$SELF" external-smoke --out "$out/external-smoke"
+        printf 'verify: external-smoke ok\n'
+    fi
+
+    printf 'verify: ok (%s)\n' "$out"
 }
 
 external_smoke_run_asset() {
@@ -535,6 +646,7 @@ case "$cmd" in
     asset) cmd_asset "$@" ;;
     smoke) cmd_smoke "$@" ;;
     external-smoke) cmd_external_smoke "$@" ;;
+    verify) cmd_verify "$@" ;;
     -h|--help|help) usage ;;
     *)
         echo "error: unknown command: $cmd" >&2

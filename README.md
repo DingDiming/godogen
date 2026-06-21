@@ -81,6 +81,7 @@ bin/godogen-ddm asset texture --provider openai --dry-run --prompt "wet cobblest
 bin/godogen-ddm asset video --provider dreamina --dry-run --image assets/img/first.png --prompt "camera push" --duration 4 -o assets/video/clip.mp4
 bin/godogen-ddm smoke
 bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
+bin/godogen-ddm verify
 ```
 
 Published game repos also get `tools/godogen-ddm`; run it from the game root for asset commands against the published `.agents` or `.claude` runtime skill copy.
@@ -88,6 +89,7 @@ Published game repos also get `tools/godogen-ddm`; run it from the game root for
 `smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
 `external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI image-video command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.
 When a charged provider task returns `pending` or `failed`, `external-smoke` prints an `incomplete` summary and exits nonzero instead of treating generation submission as asset acceptance. Raw provider stdout/stderr is not persisted in the output directory, and provider JSON error summaries redact known key/token-shaped values.
+`verify` runs the reusable local verification suite: unit tests, syntax checks, Python bytecode checks, publish/runtime wrapper matrix, `smoke`, and non-paid `external-smoke`.
 OpenAI video uses the Sora 2 Videos API, which OpenAI marks as deprecated with a scheduled shutdown on September 24, 2026; keep Dreamina/Grok available as video alternatives.
 See [DDM provider adapter branch notes](docs/ddm-provider-adapters.md) for the fork branch contract, verification commands, and remaining paid-smoke boundary.
 

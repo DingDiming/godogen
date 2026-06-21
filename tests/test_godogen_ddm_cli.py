@@ -128,6 +128,31 @@ class GodogenDdmCliTests(unittest.TestCase):
         self.assertIn("godot-csharp: ok", proc.stdout)
         self.assertIn("smoke: ok", proc.stdout)
 
+    def test_verify_can_run_reusable_publish_runtime_checks(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-ddm-verify.") as tmp:
+            proc = subprocess.run(
+                [
+                    str(CLI),
+                    "verify",
+                    "--skip-tests",
+                    "--skip-smoke",
+                    "--skip-external-smoke",
+                    "--out",
+                    tmp,
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("verify: syntax ok", proc.stdout)
+            self.assertIn("verify: py_compile ok", proc.stdout)
+            self.assertIn("verify: publish-runtime-matrix ok", proc.stdout)
+            self.assertIn("verify: ok", proc.stdout)
+            self.assertTrue((Path(tmp) / "godot-codex" / "tools" / "godogen-ddm").exists())
+
     def test_external_smoke_defaults_to_non_paid_dry_run_without_leaking_keys(self):
         env = os.environ.copy()
         env["OPENAI_API_KEY"] = "sk-test-secret-value"

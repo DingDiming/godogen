@@ -44,6 +44,7 @@ bin/godogen-ddm publish --engine godot --agent codex --out /tmp/my-game
 bin/godogen-ddm asset texture --prompt "debug grid" -o assets/img/grid.png
 bin/godogen-ddm smoke
 bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
+bin/godogen-ddm verify
 ```
 
 Published game repos receive a project-local wrapper:
@@ -69,24 +70,13 @@ The wrapper auto-locates `asset_gen.py` in either source layout or published run
 Current local verification set:
 
 ```bash
-python3 -m unittest tests/test_asset_gen_providers.py tests/test_godogen_ddm_cli.py
-/bin/bash -n bin/godogen-ddm && /bin/bash -n publish.sh
-python3 -m py_compile shared/skills/godogen/tools/asset_gen.py shared/skills/godogen/tools/providers/*.py tests/test_asset_gen_providers.py tests/test_godogen_ddm_cli.py
-bin/godogen-ddm smoke
-bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
+bin/godogen-ddm verify
 ```
 
-Publish matrix smoke:
+`verify` runs unit tests, shell syntax checks, Python bytecode checks, the publish/runtime wrapper matrix, `smoke`, and non-paid `external-smoke`. For focused runtime wrapper checks without recursive unit tests or heavier smoke:
 
 ```bash
-for engine in godot bevy babylon; do
-  for agent in codex claude; do
-    out="/tmp/godogen-$engine-$agent"
-    ./publish.sh --engine "$engine" --agent "$agent" --out "$out" --force
-    test -x "$out/tools/godogen-ddm"
-    "$out/tools/godogen-ddm" asset texture --prompt "runtime probe" --procedural-kind checker -o "$out/assets/img/probe.png"
-  done
-done
+bin/godogen-ddm verify --skip-tests --skip-smoke --skip-external-smoke --out /tmp/godogen-ddm-verify
 ```
 
 ## Remaining Explicit Authorization
