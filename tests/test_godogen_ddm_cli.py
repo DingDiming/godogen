@@ -60,6 +60,19 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertTrue((root / ".agents" / "skills" / "godot-api" / "SKILL.md").exists())
             self.assertTrue((root / ".codex" / "hooks" / "capture_result.sh").exists())
 
+    def test_smoke_runs_provider_and_godot_csharp_checks(self):
+        proc = subprocess.run(
+            [str(CLI), "smoke"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("godot-csharp: ok", proc.stdout)
+        self.assertIn("smoke: ok", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

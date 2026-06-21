@@ -83,6 +83,7 @@ bin/godogen-ddm smoke
 ```
 
 `check-env` reports provider env vars as `set` or `unset` only; it does not print key values.
+`smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
 
 ### Bevy docs setup
 
