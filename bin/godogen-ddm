@@ -10,7 +10,7 @@ usage() {
 Usage:
   godogen-ddm check-env
   godogen-ddm publish --engine godot|bevy|babylon --agent claude|codex --out <dir> [--force] [--video_hook]
-  godogen-ddm asset image|video|texture|glb|rig|retarget|resume|set_budget ...
+  godogen-ddm asset image|texture|video|glb|rig|retarget|resume|set_budget ...
   godogen-ddm smoke
 EOF
 }
@@ -107,12 +107,8 @@ cmd_asset() {
     fi
 
     case "$1" in
-        image|video|glb|rig|retarget|resume|set_budget)
+        image|texture|video|glb|rig|retarget|resume|set_budget)
             python3 "$ASSET_GEN" "$@"
-            ;;
-        texture)
-            shift
-            python3 "$ASSET_GEN" image --provider procedural --procedural-kind tile "$@"
             ;;
         *)
             echo "error: unknown asset subcommand: $1" >&2
@@ -133,8 +129,8 @@ cmd_smoke() {
     test -f "$tmp/.agents/skills/godot-api/SKILL.md"
     test -f "$tmp/.codex/hooks/capture_result.sh"
 
-    "$ROOT/bin/godogen-ddm" asset image \
-        --provider procedural --procedural-kind checker \
+    "$ROOT/bin/godogen-ddm" asset texture \
+        --procedural-kind checker \
         --prompt "smoke checker tile" \
         -o "$tmp/assets/img/smoke_checker.png" >/dev/null
 

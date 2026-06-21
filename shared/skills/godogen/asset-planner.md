@@ -59,7 +59,7 @@ Craft each prompt for its specific goal. The art direction tells you the visual 
 
 #### Backend selection
 
-Use `--provider gemini` where prompt precision matters — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Use Grok (default) for textures, simple objects, item kits, and simple scenic backgrounds (sky, clouds, abstract). Use `--provider procedural` for debug grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder sprites. Use Dreamina/OpenAI only when configured and when the provider's billing/login state is acceptable for the run.
+Use `--provider gemini` where prompt precision matters — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Use Grok (default) for simple objects, item kits, and simple scenic backgrounds (sky, clouds, abstract). For textures, prefer `asset_gen.py texture`: leave the default procedural route for debug grids, flat colors, noise terrain, simple tiles, UI panels, and placeholders; choose `texture --provider <image-provider>` when the surface needs style/detail. Use Dreamina/OpenAI only when configured and when the provider's billing/login state is acceptable for the run.
 
 #### Using image references for consistency
 

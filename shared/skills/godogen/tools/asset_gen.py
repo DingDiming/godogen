@@ -3,6 +3,7 @@
 
 Subcommands:
   image     Generate a PNG from a prompt
+  texture   Generate a texture PNG via procedural or image providers
   video     Generate MP4 video from prompt + reference image
   glb       Convert a PNG to a static GLB (30¢ default, 60¢ hd)
   rig       Convert a PNG to a rigged biped GLB (preset + 25¢)
@@ -134,16 +135,14 @@ def _emit_or_exit(result: ProviderResult, spend_service: str | None = None) -> N
         sys.exit(1)
 
 
-def cmd_image(args):
-    provider = _selected_provider(args.provider, "GODOGEN_IMAGE_PROVIDER", args.model)
+def _run_image_provider(args, output: Path, provider: str, kind: str = "image") -> None:
     if provider not in IMAGE_PROVIDERS:
         _fail_provider_error(f"Unknown image provider: {provider}. Use: {', '.join(IMAGE_PROVIDERS)}")
 
-    output = Path(args.output)
     label = f"{provider} {args.size} {args.aspect_ratio}"
     if args.image:
         label += " (image-to-image)"
-    print(f"Generating image ({label})...", file=sys.stderr)
+    print(f"Generating {kind} ({label})...", file=sys.stderr)
 
     try:
         if provider == "gemini":
@@ -175,6 +174,16 @@ def cmd_image(args):
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
         sys.exit(1)
+
+
+def cmd_image(args):
+    provider = _selected_provider(args.provider, "GODOGEN_IMAGE_PROVIDER", args.model)
+    _run_image_provider(args, Path(args.output), provider, kind="image")
+
+
+def cmd_texture(args):
+    provider = _selected_provider(args.provider, "GODOGEN_IMAGE_PROVIDER", "procedural")
+    _run_image_provider(args, Path(args.output), provider, kind="texture")
 
 
 def cmd_video(args):
@@ -529,6 +538,26 @@ def main():
                        help="Build provider request/command without submitting a paid generation task.")
     p_img.add_argument("-o", "--output", required=True, help="Output PNG path")
     p_img.set_defaults(func=cmd_image)
+
+    p_tex = sub.add_parser("texture", help="Generate a texture PNG via procedural or image providers")
+    p_tex.add_argument("--prompt", required=True, help="Texture generation prompt")
+    p_tex.add_argument("--provider", choices=IMAGE_PROVIDERS, default=None,
+                       help="Provider override. Env fallback: GODOGEN_IMAGE_PROVIDER. Default: procedural.")
+    p_tex.add_argument("--model", choices=["gemini", "grok"], default="grok",
+                       help="Legacy image backend selector if an image provider is selected through --provider/env.")
+    p_tex.add_argument("--size", choices=ALL_SIZES, default="1K",
+                       help="Resolution. Default: 1K.")
+    p_tex.add_argument("--aspect-ratio", choices=ALL_ASPECT_RATIOS, default="1:1",
+                       help="Aspect ratio. Default: 1:1")
+    p_tex.add_argument("--image", default=None, help="Reference image for provider image-to-image edit")
+    p_tex.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="tile",
+                       help="Procedural texture kind when --provider procedural. Default: tile.")
+    p_tex.add_argument("--poll", type=int, default=0,
+                       help="Dreamina: poll up to N seconds after submit. Default: 0")
+    p_tex.add_argument("--dry-run", action="store_true",
+                       help="Build provider request/command without submitting a paid generation task.")
+    p_tex.add_argument("-o", "--output", required=True, help="Output PNG path")
+    p_tex.set_defaults(func=cmd_texture)
 
     p_vid = sub.add_parser("video", help="Generate MP4 video from prompt + reference image")
     p_vid.add_argument("--provider", choices=VIDEO_PROVIDERS, default=None,

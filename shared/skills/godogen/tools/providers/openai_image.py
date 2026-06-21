@@ -6,10 +6,11 @@ import os
 import urllib.request
 from pathlib import Path
 
-from .common import ProviderResult
+from .common import ProviderResult, image_data_uri
 
 
 OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations"
+OPENAI_EDITS_URL = "https://api.openai.com/v1/images/edits"
 OPENAI_IMAGE_COST_CENTS = 0
 
 
@@ -37,6 +38,22 @@ def build_generation_request(args) -> dict:
     }
 
 
+def build_edit_request(args) -> dict:
+    source = Path(args.image)
+    return {
+        "url": OPENAI_EDITS_URL,
+        "payload": {
+            "model": os.environ.get("GODOGEN_OPENAI_IMAGE_MODEL", "gpt-image-1.5"),
+            "prompt": args.prompt,
+            "n": 1,
+            "size": _openai_size(args.aspect_ratio),
+            "output_format": "png",
+            "quality": os.environ.get("GODOGEN_OPENAI_IMAGE_QUALITY", "medium"),
+            "images": [{"image_url": image_data_uri(source)}],
+        },
+    }
+
+
 def _write_openai_image(response: dict, output: Path) -> None:
     data = response.get("data")
     if not isinstance(data, list) or not data:
@@ -59,9 +76,13 @@ def _write_openai_image(response: dict, output: Path) -> None:
 
 def generate_image(args, output: Path) -> ProviderResult:
     if args.image:
-        return ProviderResult(False, error="OpenAI image edits are not wired yet; use dreamina or gemini for image-to-image.", provider="openai")
+        source = Path(args.image)
+        if not source.exists():
+            return ProviderResult(False, error=f"Reference image not found: {source}", provider="openai")
+        request_info = build_edit_request(args)
+    else:
+        request_info = build_generation_request(args)
 
-    request_info = build_generation_request(args)
     if args.dry_run:
         return ProviderResult(
             True,

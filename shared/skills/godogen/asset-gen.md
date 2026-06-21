@@ -315,12 +315,26 @@ No post-processing — use as-is.
 
 ### Texture (2c Grok)
 
-Tileable surfaces: ground, walls, floors, UI panels. Grok handles these well — exact prompt adherence isn't critical for textures.
+Tileable surfaces: ground, walls, floors, UI panels. Use `texture` for the texture-specific entrypoint. It defaults to procedural tiles, and can switch to any image provider when style/detail matters.
 
 ```
 {name}, {description}. Top-down view, uniform lighting, no shadows, seamless tileable texture, suitable for game engine tiling, clean edges.
 ```
-`image --prompt "..." -o path.png`
+Procedural route:
+
+```bash
+python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py texture \
+  --prompt "stone floor, simple tileable game texture" \
+  -o assets/img/stone_floor.png
+```
+
+Image provider route:
+
+```bash
+python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py texture \
+  --provider openai --prompt "stylized wet cobblestone, seamless top-down game texture" \
+  -o assets/img/wet_cobblestone.png
+```
 
 No background removal — the entire image IS the texture.
 

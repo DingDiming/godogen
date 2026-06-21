@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import subprocess
@@ -192,6 +193,84 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(request["payload"]["prompt"], "clean top-down cobblestone game texture")
             self.assertEqual(request["payload"]["size"], "1536x1024")
             self.assertEqual(request["payload"]["output_format"], "png")
+
+    def test_openai_image_edit_dry_run_builds_edits_api_request(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-openai-edit.") as tmp:
+            source = Path(tmp) / "refs" / "source.png"
+            output = Path(tmp) / "assets" / "img" / "openai_edit.png"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "openai",
+                    "--dry-run",
+                    "--prompt",
+                    "turn the grass tile into snow",
+                    "--image",
+                    str(source),
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "openai")
+            request = result["request"]
+            self.assertEqual(request["url"], "https://api.openai.com/v1/images/edits")
+            self.assertEqual(request["payload"]["prompt"], "turn the grass tile into snow")
+            self.assertEqual(request["payload"]["images"][0]["image_url"], f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}")
+            self.assertEqual(request["payload"]["output_format"], "png")
+
+    def test_texture_defaults_to_procedural_tile(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-texture-procedural.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "tile.png"
+            proc = run_asset_gen(
+                [
+                    "texture",
+                    "--prompt",
+                    "simple stone floor",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "procedural")
+            self.assertEqual(result["path"], str(output))
+            self.assertEqual(output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+
+    def test_texture_can_use_image_provider_dry_run(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-texture-openai.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "texture.png"
+            proc = run_asset_gen(
+                [
+                    "texture",
+                    "--provider",
+                    "openai",
+                    "--dry-run",
+                    "--prompt",
+                    "seamless wet cobblestone game texture",
+                    "--aspect-ratio",
+                    "1:1",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertEqual(result["request"]["url"], "https://api.openai.com/v1/images/generations")
 
 
 if __name__ == "__main__":

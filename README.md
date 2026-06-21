@@ -76,7 +76,8 @@ This fork also includes `bin/godogen-ddm` for local CLI use:
 ```bash
 bin/godogen-ddm check-env
 bin/godogen-ddm publish --engine godot --agent codex --out /tmp/my-game
-bin/godogen-ddm asset image --provider procedural --prompt "debug grid" -o assets/img/grid.png
+bin/godogen-ddm asset texture --prompt "debug grid" -o assets/img/grid.png
+bin/godogen-ddm asset texture --provider openai --dry-run --prompt "wet cobblestone" -o assets/img/cobblestone.png
 bin/godogen-ddm asset video --provider dreamina --dry-run --image assets/img/first.png --prompt "camera push" --duration 4 -o assets/video/clip.mp4
 bin/godogen-ddm smoke
 ```
