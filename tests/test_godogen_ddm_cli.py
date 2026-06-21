@@ -1,5 +1,7 @@
+import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +61,31 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertTrue((root / ".agents" / "skills" / "godogen" / "SKILL.md").exists())
             self.assertTrue((root / ".agents" / "skills" / "godot-api" / "SKILL.md").exists())
             self.assertTrue((root / ".codex" / "hooks" / "capture_result.sh").exists())
+
+            output = root / "assets" / "img" / "runtime_checker.png"
+            asset_proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(root / ".agents" / "skills" / "godogen" / "tools" / "asset_gen.py"),
+                    "texture",
+                    "--prompt",
+                    "runtime checker",
+                    "--procedural-kind",
+                    "checker",
+                    "-o",
+                    str(output),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(asset_proc.returncode, 0, asset_proc.stderr)
+            result = json.loads(asset_proc.stdout)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "procedural")
+            self.assertEqual(output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
     def test_smoke_runs_provider_and_godot_csharp_checks(self):
         proc = subprocess.run(

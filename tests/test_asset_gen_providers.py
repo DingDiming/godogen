@@ -18,6 +18,15 @@ PNG_1X1 = bytes.fromhex(
 )
 
 
+def write_fake_dreamina(path, submit_key="submit_id", submit_id="submit-123", exit_code=42):
+    path.write_text(
+        "#!/bin/sh\n"
+        f"printf '{{\"{submit_key}\":\"{submit_id}\"}}\\n'\n"
+        f"exit {exit_code}\n"
+    )
+    path.chmod(0o755)
+
+
 def run_asset_gen(args, env=None):
     merged_env = os.environ.copy()
     if env:
@@ -131,6 +140,46 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertIn("--video_resolution=720p", command)
             self.assertIn("--poll=2", command)
 
+    def test_dreamina_video_nonzero_submit_id_returns_pending(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-dreamina-pending-video.") as tmp:
+            tmp_path = Path(tmp)
+            fake_dreamina = tmp_path / "dreamina"
+            write_fake_dreamina(fake_dreamina, submit_id="video-submit-123", exit_code=42)
+            first_frame = tmp_path / "assets" / "img" / "first.png"
+            output = tmp_path / "assets" / "video" / "walk.mp4"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "video",
+                    "--provider",
+                    "dreamina",
+                    "--prompt",
+                    "slow camera push in",
+                    "--image",
+                    str(first_frame),
+                    "--duration",
+                    "4",
+                    "--resolution",
+                    "720p",
+                    "--poll",
+                    "2",
+                    "-o",
+                    str(output),
+                ],
+                env={"GODOGEN_DREAMINA_BIN": str(fake_dreamina)},
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "dreamina")
+            self.assertEqual(result["submit_id"], "video-submit-123")
+            self.assertIn("query_result", result["error"])
+            self.assertFalse(output.exists())
+
     def test_dreamina_image_dry_run_builds_text2image_command(self):
         with tempfile.TemporaryDirectory(prefix="godogen-dreamina-image.") as tmp:
             output = Path(tmp) / "assets" / "img" / "dreamina.png"
@@ -163,6 +212,37 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertIn("--ratio=16:9", command)
             self.assertIn("--resolution_type=1k", command)
             self.assertIn("--poll=3", command)
+
+    def test_dreamina_image_nonzero_submit_id_returns_pending(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-dreamina-pending-image.") as tmp:
+            tmp_path = Path(tmp)
+            fake_dreamina = tmp_path / "dreamina"
+            write_fake_dreamina(fake_dreamina, submit_key="submitId", submit_id="image-submit-123", exit_code=43)
+            output = tmp_path / "assets" / "img" / "dreamina.png"
+
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "dreamina",
+                    "--prompt",
+                    "top down grass tile",
+                    "--poll",
+                    "3",
+                    "-o",
+                    str(output),
+                ],
+                env={"GODOGEN_DREAMINA_BIN": str(fake_dreamina)},
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "dreamina")
+            self.assertEqual(result["submit_id"], "image-submit-123")
+            self.assertIn("query_result", result["error"])
+            self.assertFalse(output.exists())
 
     def test_openai_image_dry_run_builds_images_api_request(self):
         with tempfile.TemporaryDirectory(prefix="godogen-openai-image.") as tmp:

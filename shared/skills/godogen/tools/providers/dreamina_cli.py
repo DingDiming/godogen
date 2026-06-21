@@ -142,6 +142,19 @@ def _copy_or_download(candidate: str, output: Path) -> bool:
     return False
 
 
+def _pending_result(media_label: str, submit_id: str, output: Path, cost_cents: int) -> ProviderResult:
+    return ProviderResult(
+        False,
+        cost_cents=cost_cents,
+        error=(
+            f"Dreamina task is pending; no {media_label} was available before --poll expired. "
+            f"Query later with: dreamina query_result --submit_id={submit_id} --download_dir={output.parent}"
+        ),
+        provider="dreamina",
+        extra={"pending": True, "submit_id": submit_id},
+    )
+
+
 def generate_video(args, output: Path) -> ProviderResult:
     command = build_image2video_command(args)
     display_command = _display_command(command)
@@ -165,7 +178,10 @@ def generate_video(args, output: Path) -> ProviderResult:
         )
 
         combined = f"{completed.stdout}\n{completed.stderr}"
+        submit_id = _find_submit_id(combined)
         if completed.returncode != 0:
+            if submit_id:
+                return _pending_result("MP4", submit_id, output, DREAMINA_VIDEO_COST_CENTS)
             return ProviderResult(
                 False,
                 error=f"Dreamina image2video failed with exit {completed.returncode}: {combined.strip()}",
@@ -183,18 +199,8 @@ def generate_video(args, output: Path) -> ProviderResult:
             if _copy_or_download(candidate, output):
                 return ProviderResult(True, path=str(output), cost_cents=DREAMINA_VIDEO_COST_CENTS, provider="dreamina")
 
-        submit_id = _find_submit_id(combined)
         if submit_id:
-            return ProviderResult(
-                False,
-                cost_cents=DREAMINA_VIDEO_COST_CENTS,
-                error=(
-                    "Dreamina task is pending; no MP4 was available before --poll expired. "
-                    f"Query later with: dreamina query_result --submit_id={submit_id} --download_dir={output.parent}"
-                ),
-                provider="dreamina",
-                extra={"pending": True, "submit_id": submit_id},
-            )
+            return _pending_result("MP4", submit_id, output, DREAMINA_VIDEO_COST_CENTS)
 
     return ProviderResult(
         False,
@@ -234,7 +240,10 @@ def generate_image(args, output: Path) -> ProviderResult:
         )
 
         combined = f"{completed.stdout}\n{completed.stderr}"
+        submit_id = _find_submit_id(combined)
         if completed.returncode != 0:
+            if submit_id:
+                return _pending_result("image", submit_id, output, DREAMINA_IMAGE_COST_CENTS)
             return ProviderResult(
                 False,
                 error=f"Dreamina image generation failed with exit {completed.returncode}: {combined.strip()}",
@@ -253,18 +262,8 @@ def generate_image(args, output: Path) -> ProviderResult:
             if _copy_or_download(candidate, output):
                 return ProviderResult(True, path=str(output), cost_cents=DREAMINA_IMAGE_COST_CENTS, provider="dreamina")
 
-        submit_id = _find_submit_id(combined)
         if submit_id:
-            return ProviderResult(
-                False,
-                cost_cents=DREAMINA_IMAGE_COST_CENTS,
-                error=(
-                    "Dreamina task is pending; no image was available before --poll expired. "
-                    f"Query later with: dreamina query_result --submit_id={submit_id} --download_dir={output.parent}"
-                ),
-                provider="dreamina",
-                extra={"pending": True, "submit_id": submit_id},
-            )
+            return _pending_result("image", submit_id, output, DREAMINA_IMAGE_COST_CENTS)
 
     return ProviderResult(
         False,
