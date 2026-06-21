@@ -61,6 +61,9 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertTrue((root / ".agents" / "skills" / "godogen" / "SKILL.md").exists())
             self.assertTrue((root / ".agents" / "skills" / "godot-api" / "SKILL.md").exists())
             self.assertTrue((root / ".codex" / "hooks" / "capture_result.sh").exists())
+            runtime_cli = root / "tools" / "godogen-ddm"
+            self.assertTrue(runtime_cli.exists())
+            self.assertTrue(os.access(runtime_cli, os.X_OK))
 
             output = root / "assets" / "img" / "runtime_checker.png"
             asset_proc = subprocess.run(
@@ -86,6 +89,31 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["provider"], "procedural")
             self.assertEqual(output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+
+            wrapper_output = root / "assets" / "img" / "runtime_wrapper_checker.png"
+            wrapper_proc = subprocess.run(
+                [
+                    str(runtime_cli),
+                    "asset",
+                    "texture",
+                    "--prompt",
+                    "runtime wrapper checker",
+                    "--procedural-kind",
+                    "checker",
+                    "-o",
+                    str(wrapper_output),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(wrapper_proc.returncode, 0, wrapper_proc.stderr)
+            wrapper_result = json.loads(wrapper_proc.stdout)
+            self.assertTrue(wrapper_result["ok"])
+            self.assertEqual(wrapper_result["provider"], "procedural")
+            self.assertEqual(wrapper_output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
     def test_smoke_runs_provider_and_godot_csharp_checks(self):
         proc = subprocess.run(

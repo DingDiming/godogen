@@ -2,8 +2,51 @@
 # DDM wrapper for the local Godogen fork.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ASSET_GEN="${GODOGEN_DDM_ASSET_GEN:-$ROOT/shared/skills/godogen/tools/asset_gen.py}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF="$SCRIPT_DIR/$(basename "$0")"
+
+find_godogen_root() {
+    local dir="$1"
+    while [ "$dir" != "/" ] && [ -n "$dir" ]; do
+        if [ -f "$dir/shared/skills/godogen/tools/asset_gen.py" ] \
+            || [ -f "$dir/.agents/skills/godogen/tools/asset_gen.py" ] \
+            || [ -f "$dir/.claude/skills/godogen/tools/asset_gen.py" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
+resolve_asset_gen() {
+    local candidate
+    if [ -n "${GODOGEN_DDM_ASSET_GEN:-}" ]; then
+        printf '%s\n' "$GODOGEN_DDM_ASSET_GEN"
+        return 0
+    fi
+
+    for candidate in \
+        "$ROOT/shared/skills/godogen/tools/asset_gen.py" \
+        "$ROOT/.agents/skills/godogen/tools/asset_gen.py" \
+        "$ROOT/.claude/skills/godogen/tools/asset_gen.py"; do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ -n "${GODOGEN_DDM_ROOT:-}" ]; then
+    ROOT="$GODOGEN_DDM_ROOT"
+elif ROOT="$(find_godogen_root "$SCRIPT_DIR")"; then
+    :
+else
+    ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+ASSET_GEN="$(resolve_asset_gen || true)"
 
 usage() {
     cat >&2 <<'EOF'
@@ -107,6 +150,10 @@ cmd_check_env() {
 }
 
 cmd_publish() {
+    if [ ! -x "$ROOT/publish.sh" ]; then
+        echo "error: publish is only available from the Godogen source repo wrapper" >&2
+        return 1
+    fi
     "$ROOT/publish.sh" "$@"
 }
 
@@ -118,6 +165,10 @@ cmd_asset() {
 
     case "$1" in
         image|texture|video|glb|rig|retarget|resume|set_budget)
+            if [ -z "$ASSET_GEN" ]; then
+                echo "error: could not locate godogen asset_gen.py from $ROOT" >&2
+                exit 1
+            fi
             python3 "$ASSET_GEN" "$@"
             ;;
         *)
@@ -215,21 +266,23 @@ EOF
 
 cmd_smoke() {
     local tmp
+    local provider_dir
     tmp="$(mktemp -d /tmp/godogen-ddm-smoke.XXXXXX)"
+    provider_dir="$(dirname "$ASSET_GEN")/providers"
 
-    python3 -m py_compile "$ASSET_GEN" "$ROOT"/shared/skills/godogen/tools/providers/*.py
-    "$ROOT/bin/godogen-ddm" publish --engine godot --agent codex --out "$tmp" >/dev/null
+    python3 -m py_compile "$ASSET_GEN" "$provider_dir"/*.py
+    "$SELF" publish --engine godot --agent codex --out "$tmp" >/dev/null
     test -f "$tmp/AGENTS.md"
     test -f "$tmp/.agents/skills/godogen/SKILL.md"
     test -f "$tmp/.agents/skills/godot-api/SKILL.md"
     test -f "$tmp/.codex/hooks/capture_result.sh"
 
-    "$ROOT/bin/godogen-ddm" asset texture \
+    "$SELF" asset texture \
         --procedural-kind checker \
         --prompt "smoke checker tile" \
         -o "$tmp/assets/img/smoke_checker.png" >/dev/null
 
-    "$ROOT/bin/godogen-ddm" asset video \
+    "$SELF" asset video \
         --provider dreamina --dry-run \
         --prompt "smoke camera push" \
         --image "$tmp/assets/img/smoke_checker.png" \
@@ -383,26 +436,26 @@ EOF
     openai_image="$out/assets/img/openai_external_smoke.png"
     tripo_glb="$out/assets/glb/tripo_external_smoke.glb"
 
-    "$ROOT/bin/godogen-ddm" asset texture \
+    "$SELF" asset texture \
         --procedural-kind checker \
         --prompt "external provider smoke checker first frame" \
         -o "$first_frame" >/dev/null 2>/dev/null
 
     if [ "$yes_charge" -eq 0 ]; then
-        "$ROOT/bin/godogen-ddm" asset video \
+        "$SELF" asset video \
             --provider dreamina --dry-run \
             --prompt "external smoke camera push" \
             --image "$first_frame" \
             --duration 4 --resolution 720p --poll "$poll" \
             -o "$dreamina_video" >/dev/null
 
-        "$ROOT/bin/godogen-ddm" asset image \
+        "$SELF" asset image \
             --provider openai --dry-run \
             --prompt "external smoke clean top-down stone tile" \
             --aspect-ratio 1:1 \
             -o "$openai_image" >/dev/null
 
-        "$ROOT/bin/godogen-ddm" asset video \
+        "$SELF" asset video \
             --provider openai --dry-run \
             --prompt "external smoke camera push across a stone floor" \
             --image "$first_frame" \
@@ -436,27 +489,27 @@ EOF
         return 2
     fi
 
-    external_smoke_run_asset dreamina-video "$ROOT/bin/godogen-ddm" asset video \
+    external_smoke_run_asset dreamina-video "$SELF" asset video \
         --provider dreamina \
         --prompt "external smoke camera push" \
         --image "$first_frame" \
         --duration 4 --resolution 720p --poll "$poll" \
         -o "$dreamina_video" || incomplete=1
 
-    external_smoke_run_asset openai-image "$ROOT/bin/godogen-ddm" asset image \
+    external_smoke_run_asset openai-image "$SELF" asset image \
         --provider openai \
         --prompt "external smoke clean top-down stone tile" \
         --aspect-ratio 1:1 \
         -o "$openai_image" || incomplete=1
 
-    external_smoke_run_asset openai-video "$ROOT/bin/godogen-ddm" asset video \
+    external_smoke_run_asset openai-video "$SELF" asset video \
         --provider openai \
         --prompt "external smoke camera push across a stone floor" \
         --image "$first_frame" \
         --duration 4 --resolution 720p --poll "$poll" \
         -o "$openai_video" || incomplete=1
 
-    external_smoke_run_asset tripo3d-glb "$ROOT/bin/godogen-ddm" asset glb \
+    external_smoke_run_asset tripo3d-glb "$SELF" asset glb \
         --image "$first_frame" \
         -o "$tripo_glb" || incomplete=1
 

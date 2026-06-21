@@ -83,6 +83,7 @@ bin/godogen-ddm smoke
 bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
 ```
 
+Published game repos also get `tools/godogen-ddm`; run it from the game root for asset commands against the published `.agents` or `.claude` runtime skill copy.
 `check-env` reports provider env vars as `set` or `unset` only; it does not print key values.
 `smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
 `external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI image-video command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.

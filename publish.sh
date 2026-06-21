@@ -213,6 +213,11 @@ python3 "$HELPERS/render_dir.py" "$TARGET/$HOOK_CONFIG_DIR/hooks" \
     "ENGINE_NAME=$ENGINE_NAME"
 chmod +x "$TARGET/$HOOK_CONFIG_DIR/hooks/capture_result.sh"
 
+mkdir -p "$TARGET/tools"
+cp "$REPO_ROOT/bin/godogen-ddm" "$TARGET/tools/godogen-ddm"
+chmod +x "$TARGET/tools/godogen-ddm"
+echo "Created tools/godogen-ddm"
+
 if [ "$VIDEO_HOOK" -eq 1 ]; then
     rsync -a "$REPO_ROOT/shared/hooks/stop_post_task_gate.py" \
         "$TARGET/$HOOK_CONFIG_DIR/hooks/"

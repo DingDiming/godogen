@@ -39,6 +39,7 @@ Default image provider is still `grok`. Default video provider is still `grok` u
 ## CLI Reference
 
 Tools live at `${GODOGEN_SKILL_DIR}/tools/`. Run from the project root.
+Published repos include `tools/godogen-ddm` as a project-local wrapper around the rendered runtime `asset_gen.py`; use it when you want the same provider commands without spelling the skill path.
 
 Keep runtime-loaded outputs under `assets/`. Put review-only references, scratch crops, and other non-runtime artifacts outside `assets/` unless the game actually loads them.
 
