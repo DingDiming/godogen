@@ -353,6 +353,8 @@ class AssetGenProviderTests(unittest.TestCase):
                 request["payload"]["input_reference"]["image_url"],
                 f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}",
             )
+            self.assertIn("deprecation", result)
+            self.assertIn("September 24, 2026", result["deprecation"])
 
     def test_openai_video_env_provider_dry_run(self):
         with tempfile.TemporaryDirectory(prefix="godogen-openai-video-env.") as tmp:

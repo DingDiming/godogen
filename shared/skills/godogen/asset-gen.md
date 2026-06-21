@@ -9,7 +9,7 @@ Generate PNG images and MP4 videos through configurable providers, and GLB 3D mo
 | Grok image/video | default, or `--provider grok` | image 2¢, video 5¢/sec | Textures, simple objects, item kits, legacy default video |
 | Gemini image | `--provider gemini` or legacy `--model gemini` | 5-15¢ by size | Precise references, characters, backgrounds, 3D refs |
 | Dreamina image/video | `--provider dreamina` | Dreamina credits, recorded as 0 cents here | Local CLI image/video generation with login state |
-| OpenAI image/video | `--provider openai` | OpenAI API billing, recorded as 0 cents here | Images API and Videos API (`sora-2`) generation |
+| OpenAI image/video | `--provider openai` | OpenAI API billing, recorded as 0 cents here | Images API and temporary Videos API (`sora-2`) generation |
 | Procedural image | `--provider procedural` | 0¢ | Debug tiles, grids, flat colors, placeholder sprites, UI panels |
 
 Provider selection:
@@ -22,7 +22,7 @@ Provider selection:
 - **Gemini** — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Gemini costs more but reliably produces what you described.
 - **Grok** — textures, simple objects, item kits, props, simple scenic backgrounds (sky, clouds, abstract). Produces high-quality (even photographic) output but often defaults to common interpretations instead of following specific instructions. Great when exact prompt adherence doesn't matter.
 - **Dreamina** — local CLI-backed image and video generation. Requires local Dreamina login state. Use `--dry-run` first when validating command construction.
-- **OpenAI** — image generation via the OpenAI Images API and video generation via the OpenAI Videos API. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
+- **OpenAI** — image generation via the OpenAI Images API and video generation via the Sora 2 Videos API. OpenAI marks Sora 2 Videos API as deprecated with a scheduled shutdown on September 24, 2026, so do not make it the only long-term video route. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
 - **Procedural** — programmatic PNG generation. Use for grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder/debug sprites.
 
 Default image provider is still `grok`. Default video provider is still `grok` unless `GODOGEN_VIDEO_PROVIDER` or `--provider` selects Dreamina or OpenAI.
@@ -150,6 +150,8 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
 ```
 
 If the OpenAI video job is still `queued` or `in_progress` before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with the OpenAI video id and retrieve/download URLs. Do not treat pending as success.
+
+OpenAI video JSON also includes a `deprecation` field while this provider is backed by Sora 2 Videos API. Treat that as an operator warning, not an error.
 
 For Grok, same cost per second at both resolutions — always use `720p`. Fall back to `480p` only if 720p fails (e.g. timeout or API error).
 

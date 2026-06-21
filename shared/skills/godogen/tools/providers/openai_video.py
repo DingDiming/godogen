@@ -13,6 +13,9 @@ OPENAI_VIDEO_COST_CENTS = 0
 OPENAI_VIDEO_MODEL_DEFAULT = "sora-2"
 OPENAI_VIDEO_SECONDS = {4, 8, 12}
 OPENAI_VIDEO_RESOLUTIONS = {"720p": "1280x720"}
+OPENAI_VIDEO_DEPRECATION = (
+    "OpenAI Sora 2 Videos API is deprecated and scheduled to shut down on September 24, 2026."
+)
 
 
 def _api_base() -> str:
@@ -86,6 +89,12 @@ def _error_message(video: dict) -> str:
     return "OpenAI video generation failed"
 
 
+def _extra(**values) -> dict:
+    data = {"deprecation": OPENAI_VIDEO_DEPRECATION}
+    data.update(values)
+    return data
+
+
 def generate_video(args, output: Path) -> ProviderResult:
     request_info = build_create_request(args)
 
@@ -95,7 +104,7 @@ def generate_video(args, output: Path) -> ProviderResult:
             path=str(output),
             cost_cents=OPENAI_VIDEO_COST_CENTS,
             provider="openai",
-            extra={"dry_run": True, "request": request_info},
+            extra=_extra(dry_run=True, request=request_info),
         )
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -115,7 +124,13 @@ def generate_video(args, output: Path) -> ProviderResult:
     status = video.get("status")
     if status == "completed":
         _download_video(_video_url(video_id, "/content"), api_key, output)
-        return ProviderResult(True, path=str(output), cost_cents=OPENAI_VIDEO_COST_CENTS, provider="openai")
+        return ProviderResult(
+            True,
+            path=str(output),
+            cost_cents=OPENAI_VIDEO_COST_CENTS,
+            provider="openai",
+            extra=_extra(video_id=video_id, status=status),
+        )
 
     if status == "failed":
         return ProviderResult(
@@ -123,7 +138,7 @@ def generate_video(args, output: Path) -> ProviderResult:
             cost_cents=OPENAI_VIDEO_COST_CENTS,
             error=_error_message(video),
             provider="openai",
-            extra={"video_id": video_id, "status": status},
+            extra=_extra(video_id=video_id, status=status),
         )
 
     return ProviderResult(
@@ -134,5 +149,5 @@ def generate_video(args, output: Path) -> ProviderResult:
             f"Retrieve later with: GET {_video_url(video_id)} and download {_video_url(video_id, '/content')}"
         ),
         provider="openai",
-        extra={"pending": True, "video_id": video_id, "status": status},
+        extra=_extra(pending=True, video_id=video_id, status=status),
     )
