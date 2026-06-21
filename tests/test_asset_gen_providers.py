@@ -244,6 +244,72 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertIn("query_result", result["error"])
             self.assertFalse(output.exists())
 
+    def test_dreamina_non_pending_failures_redact_raw_cli_output(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-dreamina-redact.") as tmp:
+            tmp_path = Path(tmp)
+            fake_dreamina = tmp_path / "dreamina"
+            fake_dreamina.write_text(
+                "#!/bin/sh\n"
+                "printf 'account=user@example.test token=dreamina-token-secret balance=999\\n'\n"
+                "printf 'stderr api_key=sk-dreamina-secret session=dreamina-session-secret\\n' >&2\n"
+                "exit 44\n"
+            )
+            fake_dreamina.chmod(0o755)
+            first_frame = tmp_path / "assets" / "img" / "first.png"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            cases = [
+                (
+                    "video",
+                    [
+                        "video",
+                        "--provider",
+                        "dreamina",
+                        "--prompt",
+                        "slow camera push in",
+                        "--image",
+                        str(first_frame),
+                        "--duration",
+                        "4",
+                        "--resolution",
+                        "720p",
+                        "-o",
+                        str(tmp_path / "assets" / "video" / "failed.mp4"),
+                    ],
+                ),
+                (
+                    "image",
+                    [
+                        "image",
+                        "--provider",
+                        "dreamina",
+                        "--prompt",
+                        "top down grass tile",
+                        "-o",
+                        str(tmp_path / "assets" / "img" / "failed.png"),
+                    ],
+                ),
+            ]
+
+            for label, args in cases:
+                with self.subTest(label=label):
+                    proc = run_asset_gen(args, env={"GODOGEN_DREAMINA_BIN": str(fake_dreamina)})
+                    self.assertEqual(proc.returncode, 1)
+                    result = parse_json_stdout(proc)
+                    self.assertFalse(result["ok"])
+                    self.assertEqual(result["provider"], "dreamina")
+                    self.assertIn("Dreamina", result["error"])
+                    combined = proc.stdout + proc.stderr
+                    for secret in [
+                        "user@example.test",
+                        "dreamina-token-secret",
+                        "sk-dreamina-secret",
+                        "dreamina-session-secret",
+                        "balance=999",
+                    ]:
+                        self.assertNotIn(secret, combined)
+
     def test_openai_image_dry_run_builds_images_api_request(self):
         with tempfile.TemporaryDirectory(prefix="godogen-openai-image.") as tmp:
             output = Path(tmp) / "assets" / "img" / "openai.png"

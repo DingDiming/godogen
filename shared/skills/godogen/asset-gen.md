@@ -21,7 +21,7 @@ Provider selection:
 **When to use which:**
 - **Gemini** — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Gemini costs more but reliably produces what you described.
 - **Grok** — textures, simple objects, item kits, props, simple scenic backgrounds (sky, clouds, abstract). Produces high-quality (even photographic) output but often defaults to common interpretations instead of following specific instructions. Great when exact prompt adherence doesn't matter.
-- **Dreamina** — local CLI-backed image and video generation. Requires local Dreamina login state. Use `--dry-run` first when validating command construction.
+- **Dreamina** — local CLI-backed image and video generation. Requires local Dreamina login state. Use `--dry-run` first when validating command construction. Non-pending failures return a short error summary; raw CLI stdout/stderr is suppressed because it may contain account, balance, or session material.
 - **OpenAI** — image generation via the OpenAI Images API and video generation via the Sora 2 Videos API. OpenAI marks Sora 2 Videos API as deprecated with a scheduled shutdown on September 24, 2026, so do not make it the only long-term video route. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
 - **Procedural** — programmatic PNG generation. Use for grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder/debug sprites.
 
@@ -137,7 +137,7 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
   -o assets/video/knight_walk.mp4
 ```
 
-If Dreamina returns a submit id but no media before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with a `dreamina query_result` hint. Do not treat pending as success.
+If Dreamina returns a submit id but no media before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with a `dreamina query_result` hint. Do not treat pending as success. If it fails without a submit id, only the exit code summary is exposed.
 
 OpenAI example:
 

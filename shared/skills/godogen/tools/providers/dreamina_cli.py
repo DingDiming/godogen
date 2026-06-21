@@ -155,6 +155,15 @@ def _pending_result(media_label: str, submit_id: str, output: Path, cost_cents: 
     )
 
 
+def _failure_result(action: str, returncode: int, cost_cents: int) -> ProviderResult:
+    return ProviderResult(
+        False,
+        cost_cents=cost_cents,
+        error=f"Dreamina {action} failed with exit {returncode}; raw CLI output was suppressed.",
+        provider="dreamina",
+    )
+
+
 def generate_video(args, output: Path) -> ProviderResult:
     command = build_image2video_command(args)
     display_command = _display_command(command)
@@ -182,11 +191,7 @@ def generate_video(args, output: Path) -> ProviderResult:
         if completed.returncode != 0:
             if submit_id:
                 return _pending_result("MP4", submit_id, output, DREAMINA_VIDEO_COST_CENTS)
-            return ProviderResult(
-                False,
-                error=f"Dreamina image2video failed with exit {completed.returncode}: {combined.strip()}",
-                provider="dreamina",
-            )
+            return _failure_result("image2video", completed.returncode, DREAMINA_VIDEO_COST_CENTS)
 
         if output.exists():
             return ProviderResult(True, path=str(output), cost_cents=DREAMINA_VIDEO_COST_CENTS, provider="dreamina")
@@ -244,11 +249,7 @@ def generate_image(args, output: Path) -> ProviderResult:
         if completed.returncode != 0:
             if submit_id:
                 return _pending_result("image", submit_id, output, DREAMINA_IMAGE_COST_CENTS)
-            return ProviderResult(
-                False,
-                error=f"Dreamina image generation failed with exit {completed.returncode}: {combined.strip()}",
-                provider="dreamina",
-            )
+            return _failure_result("image generation", completed.returncode, DREAMINA_IMAGE_COST_CENTS)
 
         if output.exists():
             return ProviderResult(True, path=str(output), cost_cents=DREAMINA_IMAGE_COST_CENTS, provider="dreamina")
