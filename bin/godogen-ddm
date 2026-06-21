@@ -241,6 +241,63 @@ cmd_smoke() {
     printf 'smoke: ok (%s)\n' "$tmp"
 }
 
+external_smoke_run_asset() {
+    local label="$1"
+    shift
+    local stdout_file="$out/.${label}.stdout"
+    local stderr_file="$out/.${label}.stderr"
+    local status
+
+    set +e
+    "$@" > "$stdout_file" 2> "$stderr_file"
+    status=$?
+    set -e
+
+    python3 - "$label" "$status" "$stdout_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+label = sys.argv[1]
+status = int(sys.argv[2])
+stdout_path = Path(sys.argv[3])
+text = stdout_path.read_text(errors="replace") if stdout_path.exists() else ""
+
+payload = None
+for line in reversed(text.splitlines()):
+    line = line.strip()
+    if not (line.startswith("{") and line.endswith("}")):
+        continue
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if isinstance(parsed, dict):
+        payload = parsed
+        break
+
+if payload is None:
+    print(f"{label}: failed exit={status}")
+    sys.exit(1)
+
+path = payload.get("path") or ""
+if payload.get("ok") is True:
+    suffix = f" {path}" if path else ""
+    print(f"{label}: ok{suffix}")
+    sys.exit(0)
+
+if payload.get("pending") is True:
+    identifier = payload.get("submit_id") or payload.get("video_id") or payload.get("task_id") or ""
+    suffix = f" {identifier}" if identifier else ""
+    print(f"{label}: pending{suffix}")
+    sys.exit(1)
+
+error = payload.get("error") or f"exit={status}"
+print(f"{label}: failed {error}")
+sys.exit(1)
+PY
+}
+
 cmd_external_smoke() {
     local yes_charge=0
     local poll=5
@@ -251,6 +308,7 @@ cmd_external_smoke() {
     local openai_video
     local openai_image
     local tripo_glb
+    local incomplete=0
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -282,7 +340,8 @@ provider path, so it is skipped unless --yes-charge is supplied.
 
 --yes-charge submits real provider tasks and may consume Dreamina credits,
 OpenAI API billing, and Tripo3D credits. It requires Dreamina CLI availability,
-OPENAI_API_KEY, and TRIPO3D_API_KEY.
+OPENAI_API_KEY, and TRIPO3D_API_KEY. Provider pending/failed states are
+summarized without echoing raw provider logs or secret values.
 EOF
                 return 0
                 ;;
@@ -357,36 +416,36 @@ EOF
         return 2
     fi
 
-    "$ROOT/bin/godogen-ddm" asset video \
+    external_smoke_run_asset dreamina-video "$ROOT/bin/godogen-ddm" asset video \
         --provider dreamina \
         --prompt "external smoke camera push" \
         --image "$first_frame" \
         --duration 4 --resolution 720p --poll "$poll" \
-        -o "$dreamina_video" >/dev/null
+        -o "$dreamina_video" || incomplete=1
 
-    "$ROOT/bin/godogen-ddm" asset image \
+    external_smoke_run_asset openai-image "$ROOT/bin/godogen-ddm" asset image \
         --provider openai \
         --prompt "external smoke clean top-down stone tile" \
         --aspect-ratio 1:1 \
-        -o "$openai_image" >/dev/null
+        -o "$openai_image" || incomplete=1
 
-    "$ROOT/bin/godogen-ddm" asset video \
+    external_smoke_run_asset openai-video "$ROOT/bin/godogen-ddm" asset video \
         --provider openai \
         --prompt "external smoke camera push across a stone floor" \
         --image "$first_frame" \
         --duration 4 --resolution 720p --poll "$poll" \
-        -o "$openai_video" >/dev/null
+        -o "$openai_video" || incomplete=1
 
-    "$ROOT/bin/godogen-ddm" asset glb \
+    external_smoke_run_asset tripo3d-glb "$ROOT/bin/godogen-ddm" asset glb \
         --image "$first_frame" \
-        -o "$tripo_glb" >/dev/null
+        -o "$tripo_glb" || incomplete=1
 
-    printf 'external-smoke: paid-run (%s)\n' "$out"
     printf 'procedural-first-frame: ok %s\n' "$first_frame"
-    printf 'dreamina-video: ok %s\n' "$dreamina_video"
-    printf 'openai-image: ok %s\n' "$openai_image"
-    printf 'openai-video: ok %s\n' "$openai_video"
-    printf 'tripo3d-glb: ok %s\n' "$tripo_glb"
+    if [ "$incomplete" -ne 0 ]; then
+        printf 'external-smoke: incomplete (%s)\n' "$out"
+        return 1
+    fi
+    printf 'external-smoke: paid-run (%s)\n' "$out"
 }
 
 if [ $# -lt 1 ]; then
