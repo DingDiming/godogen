@@ -242,6 +242,69 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertNotIn("sk-test-secret-value", proc.stdout)
             self.assertNotIn("tripo-secret-value", proc.stdout)
 
+    def test_external_smoke_yes_charge_does_not_persist_raw_provider_logs(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-ddm-external-log-hygiene.") as tmp:
+            root = Path(tmp)
+            fake_asset = root / "fake_asset_gen.py"
+            fake_asset.write_text(
+                "import json, sys\n"
+                "from pathlib import Path\n"
+                "print('stdout secret sk-test-secret-value dreamina-token-secret')\n"
+                "print('stderr secret tripo-secret-value dreamina-balance-secret', file=sys.stderr)\n"
+                "args = sys.argv[1:]\n"
+                "out = Path(args[args.index('-o') + 1])\n"
+                "out.parent.mkdir(parents=True, exist_ok=True)\n"
+                "if args[0] in {'image', 'texture'}:\n"
+                "    out.write_bytes(bytes.fromhex('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c49444154789c63606060000000040001f61738550000000049454e44ae426082'))\n"
+                "elif args[0] == 'video':\n"
+                "    out.write_bytes(b'fake mp4')\n"
+                "elif args[0] == 'glb':\n"
+                "    out.write_bytes(b'fake glb')\n"
+                "print(json.dumps({'ok': True, 'path': str(out), 'cost_cents': 0}))\n"
+            )
+            fake_dreamina = root / "dreamina"
+            fake_dreamina.write_text("#!/bin/sh\nexit 0\n")
+            fake_dreamina.chmod(0o755)
+
+            env = os.environ.copy()
+            env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
+            env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
+            env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["TRIPO3D_API_KEY"] = "tripo-secret-value"
+
+            out_dir = root / "out"
+            proc = subprocess.run(
+                [str(CLI), "external-smoke", "--yes-charge", "--out", str(out_dir), "--poll", "1"],
+                cwd=REPO_ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            combined_output = proc.stdout + proc.stderr
+            for secret in [
+                "sk-test-secret-value",
+                "tripo-secret-value",
+                "dreamina-token-secret",
+                "dreamina-balance-secret",
+            ]:
+                self.assertNotIn(secret, combined_output)
+
+            leaked_files = []
+            for path in out_dir.rglob("*"):
+                if path.is_file():
+                    data = path.read_bytes()
+                    if any(secret.encode() in data for secret in [
+                        "sk-test-secret-value",
+                        "tripo-secret-value",
+                        "dreamina-token-secret",
+                        "dreamina-balance-secret",
+                    ]):
+                        leaked_files.append(path.relative_to(out_dir).as_posix())
+            self.assertEqual(leaked_files, [])
+
 
 if __name__ == "__main__":
     unittest.main()

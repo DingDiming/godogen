@@ -244,15 +244,18 @@ cmd_smoke() {
 external_smoke_run_asset() {
     local label="$1"
     shift
-    local stdout_file="$out/.${label}.stdout"
-    local stderr_file="$out/.${label}.stderr"
+    local stdout_file
     local status
+    local parse_status
+
+    stdout_file="$(mktemp "/tmp/godogen-ddm-${label}.stdout.XXXXXX")"
 
     set +e
-    "$@" > "$stdout_file" 2> "$stderr_file"
+    "$@" > "$stdout_file" 2>/dev/null
     status=$?
     set -e
 
+    set +e
     python3 - "$label" "$status" "$stdout_file" <<'PY'
 import json
 import sys
@@ -296,6 +299,10 @@ error = payload.get("error") or f"exit={status}"
 print(f"{label}: failed {error}")
 sys.exit(1)
 PY
+    parse_status=$?
+    set -e
+    rm -f "$stdout_file"
+    return "$parse_status"
 }
 
 cmd_external_smoke() {
@@ -366,7 +373,7 @@ EOF
     "$ROOT/bin/godogen-ddm" asset texture \
         --procedural-kind checker \
         --prompt "external provider smoke checker first frame" \
-        -o "$first_frame" >/dev/null
+        -o "$first_frame" >/dev/null 2>/dev/null
 
     if [ "$yes_charge" -eq 0 ]; then
         "$ROOT/bin/godogen-ddm" asset video \

@@ -86,7 +86,7 @@ bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
 `check-env` reports provider env vars as `set` or `unset` only; it does not print key values.
 `smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
 `external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI image-video command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.
-When a charged provider task returns `pending` or `failed`, `external-smoke` prints an `incomplete` summary and exits nonzero instead of treating generation submission as asset acceptance.
+When a charged provider task returns `pending` or `failed`, `external-smoke` prints an `incomplete` summary and exits nonzero instead of treating generation submission as asset acceptance. Raw provider stdout/stderr is not persisted in the output directory.
 OpenAI video uses the Sora 2 Videos API, which OpenAI marks as deprecated with a scheduled shutdown on September 24, 2026; keep Dreamina/Grok available as video alternatives.
 
 ### Bevy docs setup
