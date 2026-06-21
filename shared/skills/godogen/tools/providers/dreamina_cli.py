@@ -14,6 +14,7 @@ from .common import ProviderResult
 
 DREAMINA_IMAGE_COST_CENTS = 0
 DREAMINA_VIDEO_COST_CENTS = 0
+DREAMINA_RATIOS = ["21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"]
 
 
 def _dreamina_bin() -> str:
@@ -40,6 +41,40 @@ def build_image2video_command(args) -> list[str]:
         f"--prompt={args.prompt}",
         f"--duration={args.duration}",
         f"--video_resolution={args.resolution}",
+        f"--poll={args.poll}",
+    ]
+
+
+def _resolution_type(size: str, image_to_image: bool) -> str:
+    if image_to_image and size in {"512", "1K"}:
+        return "2k"
+    return {
+        "512": "1k",
+        "1K": "1k",
+        "2K": "2k",
+        "4K": "4k",
+    }[size]
+
+
+def build_text2image_command(args) -> list[str]:
+    return [
+        _dreamina_bin(),
+        "text2image",
+        f"--prompt={args.prompt}",
+        f"--ratio={args.aspect_ratio}",
+        f"--resolution_type={_resolution_type(args.size, image_to_image=False)}",
+        f"--poll={args.poll}",
+    ]
+
+
+def build_image2image_command(args) -> list[str]:
+    return [
+        _dreamina_bin(),
+        "image2image",
+        f"--images={args.image}",
+        f"--prompt={args.prompt}",
+        f"--ratio={args.aspect_ratio}",
+        f"--resolution_type={_resolution_type(args.size, image_to_image=True)}",
         f"--poll={args.poll}",
     ]
 
@@ -83,6 +118,13 @@ def _find_media_candidates(text: str, suffix: str) -> list[str]:
                 candidates.append(item)
     candidates.extend(re.findall(r"(https?://\S+?%s)(?:[\s\"']|$)" % re.escape(suffix), text, re.IGNORECASE))
     candidates.extend(re.findall(r"((?:/|\.{1,2}/|[A-Za-z]:\\)[^\s\"']+?%s)(?:[\s\"']|$)" % re.escape(suffix), text, re.IGNORECASE))
+    return candidates
+
+
+def _find_image_candidates(text: str) -> list[str]:
+    candidates = []
+    for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+        candidates.extend(_find_media_candidates(text, suffix))
     return candidates
 
 
@@ -158,5 +200,75 @@ def generate_video(args, output: Path) -> ProviderResult:
         False,
         cost_cents=DREAMINA_VIDEO_COST_CENTS,
         error="Dreamina completed without an MP4 path or submit_id; no output was written.",
+        provider="dreamina",
+    )
+
+
+def generate_image(args, output: Path) -> ProviderResult:
+    if args.aspect_ratio not in DREAMINA_RATIOS:
+        return ProviderResult(
+            False,
+            error=f"Dreamina does not support aspect ratio {args.aspect_ratio}. Use: {', '.join(DREAMINA_RATIOS)}",
+            provider="dreamina",
+        )
+
+    command = build_image2image_command(args) if args.image else build_text2image_command(args)
+    display_command = _display_command(command)
+    if args.dry_run:
+        return ProviderResult(
+            True,
+            path=str(output),
+            cost_cents=DREAMINA_IMAGE_COST_CENTS,
+            provider="dreamina",
+            extra={"dry_run": True, "command": display_command},
+        )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="godogen-dreamina.") as tmp:
+        completed = subprocess.run(
+            command,
+            cwd=tmp,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        combined = f"{completed.stdout}\n{completed.stderr}"
+        if completed.returncode != 0:
+            return ProviderResult(
+                False,
+                error=f"Dreamina image generation failed with exit {completed.returncode}: {combined.strip()}",
+                provider="dreamina",
+            )
+
+        if output.exists():
+            return ProviderResult(True, path=str(output), cost_cents=DREAMINA_IMAGE_COST_CENTS, provider="dreamina")
+
+        for path in Path(tmp).rglob("*"):
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+                _copy_or_download(str(path), output)
+                return ProviderResult(True, path=str(output), cost_cents=DREAMINA_IMAGE_COST_CENTS, provider="dreamina")
+
+        for candidate in _find_image_candidates(combined):
+            if _copy_or_download(candidate, output):
+                return ProviderResult(True, path=str(output), cost_cents=DREAMINA_IMAGE_COST_CENTS, provider="dreamina")
+
+        submit_id = _find_submit_id(combined)
+        if submit_id:
+            return ProviderResult(
+                False,
+                cost_cents=DREAMINA_IMAGE_COST_CENTS,
+                error=(
+                    "Dreamina task is pending; no image was available before --poll expired. "
+                    f"Query later with: dreamina query_result --submit_id={submit_id} --download_dir={output.parent}"
+                ),
+                provider="dreamina",
+                extra={"pending": True, "submit_id": submit_id},
+            )
+
+    return ProviderResult(
+        False,
+        cost_cents=DREAMINA_IMAGE_COST_CENTS,
+        error="Dreamina completed without an image path or submit_id; no output was written.",
         provider="dreamina",
     )

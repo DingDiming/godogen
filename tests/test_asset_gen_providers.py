@@ -130,6 +130,69 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertIn("--video_resolution=720p", command)
             self.assertIn("--poll=2", command)
 
+    def test_dreamina_image_dry_run_builds_text2image_command(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-dreamina-image.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "dreamina.png"
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "dreamina",
+                    "--dry-run",
+                    "--prompt",
+                    "top down grass tile",
+                    "--size",
+                    "1K",
+                    "--aspect-ratio",
+                    "16:9",
+                    "--poll",
+                    "3",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "dreamina")
+            command = result["command"]
+            self.assertEqual(command[:2], ["dreamina", "text2image"])
+            self.assertIn("--ratio=16:9", command)
+            self.assertIn("--resolution_type=1k", command)
+            self.assertIn("--poll=3", command)
+
+    def test_openai_image_dry_run_builds_images_api_request(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-openai-image.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "openai.png"
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "openai",
+                    "--dry-run",
+                    "--prompt",
+                    "clean top-down cobblestone game texture",
+                    "--aspect-ratio",
+                    "16:9",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertEqual(result["path"], str(output))
+            request = result["request"]
+            self.assertEqual(request["url"], "https://api.openai.com/v1/images/generations")
+            self.assertEqual(request["payload"]["prompt"], "clean top-down cobblestone game texture")
+            self.assertEqual(request["payload"]["size"], "1536x1024")
+            self.assertEqual(request["payload"]["output_format"], "png")
+
 
 if __name__ == "__main__":
     unittest.main()

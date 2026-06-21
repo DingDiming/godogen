@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from providers import dreamina_cli, gemini, grok, procedural
+from providers import dreamina_cli, gemini, grok, openai_image, procedural
 from providers.common import ProviderResult
 
 TOOLS_DIR = Path(__file__).parent
@@ -165,10 +165,12 @@ def cmd_image(args):
             _emit_or_exit(procedural.generate_image(args, output))
 
         elif provider == "dreamina":
-            _fail_provider_error("Dreamina image provider is not wired yet; use procedural, grok, or gemini for now.")
+            check_budget(dreamina_cli.DREAMINA_IMAGE_COST_CENTS)
+            _emit_or_exit(dreamina_cli.generate_image(args, output))
 
         elif provider == "openai":
-            _fail_provider_error("OpenAI image provider is not wired yet; use procedural, grok, or gemini for now.")
+            check_budget(openai_image.OPENAI_IMAGE_COST_CENTS)
+            _emit_or_exit(openai_image.generate_image(args, output))
 
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
@@ -521,6 +523,10 @@ def main():
     p_img.add_argument("--image", default=None, help="Reference image for image-to-image edit")
     p_img.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="checker",
                        help="Procedural image kind when --provider procedural. Default: checker.")
+    p_img.add_argument("--poll", type=int, default=0,
+                       help="Dreamina: poll up to N seconds after submit. Default: 0")
+    p_img.add_argument("--dry-run", action="store_true",
+                       help="Build provider request/command without submitting a paid generation task.")
     p_img.add_argument("-o", "--output", required=True, help="Output PNG path")
     p_img.set_defaults(func=cmd_image)
 
