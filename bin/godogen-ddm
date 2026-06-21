@@ -258,6 +258,8 @@ external_smoke_run_asset() {
     set +e
     python3 - "$label" "$status" "$stdout_file" <<'PY'
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -265,6 +267,17 @@ label = sys.argv[1]
 status = int(sys.argv[2])
 stdout_path = Path(sys.argv[3])
 text = stdout_path.read_text(errors="replace") if stdout_path.exists() else ""
+
+def redact(text):
+    value = str(text)
+    for name in ("OPENAI_API_KEY", "TRIPO3D_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY"):
+        secret = os.environ.get(name)
+        if secret:
+            value = value.replace(secret, "[redacted]")
+    value = re.sub(r"sk-[A-Za-z0-9._-]+", "[redacted]", value)
+    value = re.sub(r"(?i)(token|session|api[_-]?key)=([^\\s,;]+)", r"\1=[redacted]", value)
+    value = re.sub(r"(?i)\b[A-Za-z0-9._-]*(?:token|secret)[A-Za-z0-9._-]*\b", "[redacted]", value)
+    return value
 
 payload = None
 for line in reversed(text.splitlines()):
@@ -295,7 +308,7 @@ if payload.get("pending") is True:
     print(f"{label}: pending{suffix}")
     sys.exit(1)
 
-error = payload.get("error") or f"exit={status}"
+error = redact(payload.get("error") or f"exit={status}")
 print(f"{label}: failed {error}")
 sys.exit(1)
 PY

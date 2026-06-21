@@ -44,7 +44,7 @@ Keep runtime-loaded outputs under `assets/`. Put review-only references, scratch
 
 Every provider output must land under `assets/` or an explicit review/reference path such as `refs/`. A successful provider JSON response is not final asset acceptance: import/build the game and verify the asset in screenshots or video before calling the game task done.
 
-For source-repo operator checks, `bin/godogen-ddm external-smoke` creates a procedural first frame and validates Dreamina/OpenAI command construction without submitting paid work. `bin/godogen-ddm external-smoke --yes-charge` is the explicit opt-in path for real Dreamina/OpenAI/Tripo3D smoke and may consume provider credits/API billing. If any charged provider returns `pending` or `failed`, the wrapper prints an `incomplete` summary and exits nonzero; do not treat task submission as asset acceptance. Raw provider stdout/stderr is summarized, not persisted under the output directory.
+For source-repo operator checks, `bin/godogen-ddm external-smoke` creates a procedural first frame and validates Dreamina/OpenAI command construction without submitting paid work. `bin/godogen-ddm external-smoke --yes-charge` is the explicit opt-in path for real Dreamina/OpenAI/Tripo3D smoke and may consume provider credits/API billing. If any charged provider returns `pending` or `failed`, the wrapper prints an `incomplete` summary and exits nonzero; do not treat task submission as asset acceptance. Raw provider stdout/stderr is summarized, not persisted under the output directory, and JSON error summaries redact known key/token-shaped values.
 
 ### Generate image
 
