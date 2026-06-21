@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# DDM wrapper for the local Godogen fork.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ASSET_GEN="$ROOT/shared/skills/godogen/tools/asset_gen.py"
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  godogen-ddm check-env
+  godogen-ddm publish --engine godot|bevy|babylon --agent claude|codex --out <dir> [--force] [--video_hook]
+  godogen-ddm asset image|video|texture|glb|rig|retarget|resume|set_budget ...
+  godogen-ddm smoke
+EOF
+}
+
+first_line() {
+    sed -n '1p'
+}
+
+tool_status() {
+    local label="$1"
+    shift
+    local binary="$1"
+    local output
+    local status
+
+    if ! command -v "$binary" >/dev/null 2>&1; then
+        printf '%s: missing\n' "$label"
+        return
+    fi
+
+    set +e
+    output="$("$@" 2>&1)"
+    status=$?
+    set -e
+    output="$(printf '%s\n' "$output" | first_line)"
+    if [ -z "$output" ]; then
+        output="available"
+    fi
+    if [ "$status" -eq 0 ]; then
+        printf '%s: %s\n' "$label" "$output"
+    else
+        printf '%s: error: %s\n' "$label" "$output"
+    fi
+}
+
+dreamina_status() {
+    local dreamina_bin="${GODOGEN_DREAMINA_BIN:-}"
+    local output
+    if [ -z "$dreamina_bin" ]; then
+        if command -v dreamina >/dev/null 2>&1; then
+            dreamina_bin="$(command -v dreamina)"
+        elif [ -x /Users/ddm/.local/bin/dreamina ]; then
+            dreamina_bin="/Users/ddm/.local/bin/dreamina"
+        fi
+    fi
+
+    if [ -z "$dreamina_bin" ] || [ ! -x "$dreamina_bin" ]; then
+        printf 'dreamina: missing\n'
+        return
+    fi
+
+    output="$("$dreamina_bin" --version 2>&1 || true)"
+    output="$(printf '%s\n' "$output" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | first_line)"
+    if [ -z "$output" ]; then
+        output="available"
+    fi
+    printf 'dreamina: %s\n' "$output"
+}
+
+env_status() {
+    local name="$1"
+    eval "local value=\${$name:-}"
+    if [ -n "$value" ]; then
+        printf '%s=set\n' "$name"
+    else
+        printf '%s=unset\n' "$name"
+    fi
+}
+
+cmd_check_env() {
+    tool_status dotnet dotnet --version
+    tool_status godot godot --version
+    tool_status magick magick --version
+    tool_status ffmpeg ffmpeg -version
+    dreamina_status
+
+    env_status GODOGEN_IMAGE_PROVIDER
+    env_status GODOGEN_VIDEO_PROVIDER
+    env_status GODOGEN_DREAMINA_BIN
+    env_status GOOGLE_API_KEY
+    env_status XAI_API_KEY
+    env_status OPENAI_API_KEY
+    env_status TRIPO3D_API_KEY
+}
+
+cmd_publish() {
+    "$ROOT/publish.sh" "$@"
+}
+
+cmd_asset() {
+    if [ $# -lt 1 ]; then
+        usage
+        exit 1
+    fi
+
+    case "$1" in
+        image|video|glb|rig|retarget|resume|set_budget)
+            python3 "$ASSET_GEN" "$@"
+            ;;
+        texture)
+            shift
+            python3 "$ASSET_GEN" image --provider procedural --procedural-kind tile "$@"
+            ;;
+        *)
+            echo "error: unknown asset subcommand: $1" >&2
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+cmd_smoke() {
+    local tmp
+    tmp="$(mktemp -d /tmp/godogen-ddm-smoke.XXXXXX)"
+
+    python3 -m py_compile "$ASSET_GEN" "$ROOT"/shared/skills/godogen/tools/providers/*.py
+    "$ROOT/bin/godogen-ddm" publish --engine godot --agent codex --out "$tmp" >/dev/null
+    test -f "$tmp/AGENTS.md"
+    test -f "$tmp/.agents/skills/godogen/SKILL.md"
+    test -f "$tmp/.agents/skills/godot-api/SKILL.md"
+    test -f "$tmp/.codex/hooks/capture_result.sh"
+
+    "$ROOT/bin/godogen-ddm" asset image \
+        --provider procedural --procedural-kind checker \
+        --prompt "smoke checker tile" \
+        -o "$tmp/assets/img/smoke_checker.png" >/dev/null
+
+    "$ROOT/bin/godogen-ddm" asset video \
+        --provider dreamina --dry-run \
+        --prompt "smoke camera push" \
+        --image "$tmp/assets/img/smoke_checker.png" \
+        --duration 4 --resolution 720p --poll 1 \
+        -o "$tmp/assets/video/smoke.mp4" >/dev/null
+
+    printf 'smoke: ok (%s)\n' "$tmp"
+}
+
+if [ $# -lt 1 ]; then
+    usage
+    exit 1
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+    check-env) cmd_check_env "$@" ;;
+    publish) cmd_publish "$@" ;;
+    asset) cmd_asset "$@" ;;
+    smoke) cmd_smoke "$@" ;;
+    -h|--help|help) usage ;;
+    *)
+        echo "error: unknown command: $cmd" >&2
+        usage
+        exit 1
+        ;;
+esac
