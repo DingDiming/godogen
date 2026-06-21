@@ -98,7 +98,6 @@ Requires Python 3.10+.
 ```bash
 python3 --version
 pip install -r shared/skills/godogen/tools/requirements.txt
-pip install google-genai
 ```
 
 In a published game repo, the same asset-generation requirements file lives at:
@@ -106,7 +105,7 @@ In a published game repo, the same asset-generation requirements file lives at:
 - `.claude/skills/godogen/tools/requirements.txt` for Claude Code
 - `.agents/skills/godogen/tools/requirements.txt` for Codex
 
-`google-genai` is required by `asset_gen.py` for Gemini image generation.
+The requirements file contains optional provider SDKs used by `asset_gen.py` when that provider is selected. Procedural generation and provider dry-runs do not need external SDK credentials.
 
 ## Godot (.NET edition)
 
@@ -226,11 +225,17 @@ ls ~/.local/share/godot/export_templates/*/android_debug.apk
 
 ## API Keys
 
-Set in environment:
+Set only the credentials for providers you enable:
 
+- `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural` — optional image provider override
+- `GODOGEN_VIDEO_PROVIDER=dreamina|grok` — optional video provider override
 - `GOOGLE_API_KEY` — Gemini image generation
 - `XAI_API_KEY` — xAI Grok image/video generation
+- `OPENAI_API_KEY` — OpenAI image generation
+- Dreamina CLI local login state — Dreamina image/video generation
 - `TRIPO3D_API_KEY` — image-to-3D conversion
+
+Provider dry-runs and procedural generation do not require API keys. Never commit API keys or local Dreamina session material.
 
 ## Post-Task Telegram Push (optional)
 

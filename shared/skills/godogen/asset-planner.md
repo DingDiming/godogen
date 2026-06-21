@@ -21,7 +21,7 @@ Read `reference.png` — understand the visual composition: what objects are vis
 Read `STRUCTURE.md` (especially **Asset Hints**) and `PLAN.md` (especially **Assets needed** per task). Cross-reference both with the reference image to build the complete asset list:
 - **3D models**: characters, vehicles, key props, buildings — anything that needs geometry
 - **Textures**: ground surfaces, walls, UI backgrounds — flat materials that tile
-- **Backgrounds**: sky panoramas, parallax layers, title screens, large scenic images — use `--model gemini --size 2K` and an appropriate `--aspect-ratio`
+- **Backgrounds**: sky panoramas, parallax layers, title screens, large scenic images — use `--provider gemini --size 2K` or another configured image provider with an appropriate `--aspect-ratio`
 - **Animated sprites**: characters or objects with multiple actions (walk, attack, idle) — plan the motion graph before generating
 
 The scaffold's Asset Hints describe what the architecture needs. The decomposer's Assets needed fields describe what each task needs. Reconcile both — they may overlap or one may mention assets the other missed.
@@ -32,8 +32,10 @@ Keep runtime-loaded outputs under `assets/` so the engine can load them at runti
 
 Each asset costs:
 - Texture / simple sprite (Grok): 2 cents
+- Debug texture / grid / flat UI panel / placeholder (procedural): 0 cents
 - Character / reference / 3D ref (Gemini 1K): 7 cents
 - Background: 2 cents (Grok, simple scenic) or 10 cents (Gemini 2K, precise layout)
+- Dreamina/OpenAI images: recorded as 0 cents by Godogen because they bill through provider credits/API billing, not the cents table
 - 3D model: 37 cents (7 cent Gemini image + 30 cent GLB at medium quality)
 
 Animated sprites cost more — budget carefully:
@@ -57,7 +59,7 @@ Craft each prompt for its specific goal. The art direction tells you the visual 
 
 #### Backend selection
 
-Use Gemini (`--model gemini`) where prompt precision matters — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Use Grok (default) for textures, simple objects, item kits, and simple scenic backgrounds (sky, clouds, abstract).
+Use `--provider gemini` where prompt precision matters — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Use Grok (default) for textures, simple objects, item kits, and simple scenic backgrounds (sky, clouds, abstract). Use `--provider procedural` for debug grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder sprites. Use Dreamina/OpenAI only when configured and when the provider's billing/login state is acceptable for the run.
 
 #### Using image references for consistency
 
@@ -81,8 +83,8 @@ To prevent cost overruns, a JSON log is automatically maintained that tracks the
 #### Common Mistakes
 
 - **Detailed image shrunk to a tile** — minimum generation resolution is 1K. A 1024px image downscaled to 64px looks muddy. For small sprites: avoid tiny display sizes (128px+ preferred), generate a kit image with multiple objects sharing one 1K image and crop, or prompt for bold simple forms (thick outlines, flat colors, exaggerated proportions).
-- **Tiling texture for a unique background** — don't tile a small repeating texture where the game needs a single scenic background. Use `--model gemini --size 2K` instead.
-- **Image where procedural drawing works** — pure geometric primitives (solid-color rectangles for health bars, single-color circle for a ball, straight divider lines) should be drawn in code. But anything with texture, detail, or artistic style — characters, backgrounds, terrain, objects, icons — should use generated assets even if you *could* approximate it with code. Procedural vector art almost always looks worse than a generated image.
+- **Tiling texture for a unique background** — don't tile a small repeating texture where the game needs a single scenic background. Use `--provider gemini --size 2K` or another configured image provider instead.
+- **Image where procedural generation works** — grids, flat colors, noise terrain, simple repeated tiles, UI panels, and placeholder/debug sprites should use `--provider procedural`. Artistic characters, hero backgrounds, 3D model references, and style-bearing objects should use an image provider and then be reviewed in-game.
 - **Stretching one texture over a large area** — a small texture stretched across a big surface looks blurry. Use a tileable texture or generate at higher resolution.
 
 ### 5. Write ASSETS.md
