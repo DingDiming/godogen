@@ -27,6 +27,15 @@ resolve_path() {
     python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).expanduser().resolve())' "$1"
 }
 
+capitalize_first() {
+    local value="$1"
+    local first="${value:0:1}"
+    local rest="${value:1}"
+
+    first="$(printf '%s' "$first" | LC_CTYPE=C tr '[:lower:]' '[:upper:]')"
+    printf '%s%s' "$first" "$rest"
+}
+
 link_bevy_docs() {
     local target_docs_dir="$1"
     local source_docs_dir="$REPO_ROOT/bevy/skills/bevy-help/docs"
@@ -84,6 +93,8 @@ case "$ENGINE" in
     godot|bevy|babylon) ;;
     *) echo "error: --engine must be godot, bevy, or babylon" >&2; usage; exit 1 ;;
 esac
+
+ENGINE_NAME="$(capitalize_first "$ENGINE")"
 
 case "$AGENT" in
     claude)
@@ -154,7 +165,7 @@ python3 "$HELPERS/render_dir.py" "$TMP" \
     "BEVY_HELP_SKILL_DIR=$SKILLS_DIR_REL/bevy-help" \
     "BABYLON_HELP_SKILL_DIR=$SKILLS_DIR_REL/babylon-help" \
     "HOOK_CONFIG_DIR=$HOOK_CONFIG_DIR" \
-    "ENGINE_NAME=${ENGINE^}" \
+    "ENGINE_NAME=$ENGINE_NAME" \
     "GODOGEN_COMMAND=$GODOGEN_COMMAND" \
     "GODOT_API_COMMAND=$GODOT_API_COMMAND" \
     "BEVY_HELP_COMMAND=$BEVY_HELP_COMMAND" \
@@ -199,7 +210,7 @@ python3 "$HELPERS/render_dir.py" "$TARGET/$HOOK_CONFIG_DIR/hooks" \
     "AGENT_ID=$AGENT" \
     "AGENT_NAME=$AGENT_NAME" \
     "HOOK_CONFIG_DIR=$HOOK_CONFIG_DIR" \
-    "ENGINE_NAME=${ENGINE^}"
+    "ENGINE_NAME=$ENGINE_NAME"
 chmod +x "$TARGET/$HOOK_CONFIG_DIR/hooks/capture_result.sh"
 
 if [ "$VIDEO_HOOK" -eq 1 ]; then
