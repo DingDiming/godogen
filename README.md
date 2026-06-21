@@ -38,7 +38,7 @@ Claude Code vs Codex is a publish-time render choice, not a separate source tree
 ### Prerequisites
 
 - [Godot 4](https://godotengine.org/download/) (.NET build) on `PATH` for Godot projects
-- Rust/Cargo plus local Bevy docs for Bevy projects
+- Current stable Rust/Cargo plus local Bevy docs for Bevy projects
 - Node.js 22.12+ and npm for Babylon.js projects
 - Chrome or Chromium with hardware WebGL2 for Babylon.js browser capture
 - Python 3 with pip
@@ -90,10 +90,11 @@ bin/godogen-ddm smoke
 If you're working on Bevy generation, configure and populate a shared Bevy docs folder once after clone:
 
 ```bash
+rustup update stable
 ./setup_bevy_docs.sh /absolute/or/user/path/to/bevy-docs
 ```
 
-The setup script links `bevy/skills/bevy-help/docs/` to that folder, creates shallow Bevy docs source checkouts for new caches, and builds local rustdoc for the current stable release. No default path is assumed. See [setup.md](setup.md) for the full workstation setup.
+The setup script links `bevy/skills/bevy-help/docs/` to that folder, creates shallow Bevy docs source checkouts for new caches, and builds local rustdoc for the current stable Bevy release. Because the script tracks current stable Bevy, update Rust stable first if your toolchain is older than the Bevy release's minimum supported Rust version. No default path is assumed. See [setup.md](setup.md) for the full workstation setup.
 
 ## Running on a server
 

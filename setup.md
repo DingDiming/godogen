@@ -7,6 +7,7 @@ Shared workstation setup for the consolidated Godogen source repo.
 If you work on the Bevy source in this repo, choose a shared docs folder and populate it once after clone:
 
 ```bash
+rustup update stable
 ./setup_bevy_docs.sh /absolute/or/user/path/to/bevy-docs
 ```
 
@@ -18,6 +19,8 @@ This script:
 - removes temporary Cargo build artifacts after rustdoc is copied
 
 No default path is assumed. Pick a writable folder on your machine. Published Bevy game repos reuse the source repo's configured docs symlinks.
+
+The setup script follows the current stable Bevy release. Keep Rust stable current before running it; otherwise Cargo may fail when the selected Bevy release requires a newer minimum Rust version.
 
 The default cache is roughly 2 GB. Pass `--keep-target` if you want faster repeated rustdoc rebuilds and can spare several more GB for Cargo build artifacts.
 
