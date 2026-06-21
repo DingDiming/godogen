@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import urllib.request
+from pathlib import Path
+
+from .common import ProviderResult
+
+
+DREAMINA_IMAGE_COST_CENTS = 0
+DREAMINA_VIDEO_COST_CENTS = 0
+
+
+def _dreamina_bin() -> str:
+    override = os.environ.get("GODOGEN_DREAMINA_BIN")
+    if override:
+        return override
+    local = Path("/Users/ddm/.local/bin/dreamina")
+    if local.exists():
+        return str(local)
+    return "dreamina"
+
+
+def _display_command(command: list[str]) -> list[str]:
+    if Path(command[0]).name == "dreamina":
+        return ["dreamina", *command[1:]]
+    return command
+
+
+def build_image2video_command(args) -> list[str]:
+    return [
+        _dreamina_bin(),
+        "image2video",
+        f"--image={args.image}",
+        f"--prompt={args.prompt}",
+        f"--duration={args.duration}",
+        f"--video_resolution={args.resolution}",
+        f"--poll={args.poll}",
+    ]
+
+
+def _extract_json_objects(text: str) -> list[dict]:
+    objects = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or not line.endswith("}"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            objects.append(parsed)
+    return objects
+
+
+def _find_submit_id(text: str) -> str | None:
+    for parsed in _extract_json_objects(text):
+        for key in ("submit_id", "submitId", "id"):
+            value = parsed.get(key)
+            if isinstance(value, str) and value:
+                return value
+    match = re.search(r"submit[_-]?id[\"'=:\s]+([A-Za-z0-9_.:-]+)", text, re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _find_media_candidates(text: str, suffix: str) -> list[str]:
+    candidates = []
+    for parsed in _extract_json_objects(text):
+        stack = [parsed]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                stack.extend(item.values())
+            elif isinstance(item, list):
+                stack.extend(item)
+            elif isinstance(item, str) and suffix in item.lower():
+                candidates.append(item)
+    candidates.extend(re.findall(r"(https?://\S+?%s)(?:[\s\"']|$)" % re.escape(suffix), text, re.IGNORECASE))
+    candidates.extend(re.findall(r"((?:/|\.{1,2}/|[A-Za-z]:\\)[^\s\"']+?%s)(?:[\s\"']|$)" % re.escape(suffix), text, re.IGNORECASE))
+    return candidates
+
+
+def _copy_or_download(candidate: str, output: Path) -> bool:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if candidate.startswith(("http://", "https://")):
+        with urllib.request.urlopen(candidate, timeout=120) as response:
+            output.write_bytes(response.read())
+        return True
+
+    source = Path(candidate).expanduser()
+    if source.exists():
+        shutil.copyfile(source, output)
+        return True
+    return False
+
+
+def generate_video(args, output: Path) -> ProviderResult:
+    command = build_image2video_command(args)
+    display_command = _display_command(command)
+    if args.dry_run:
+        return ProviderResult(
+            True,
+            path=str(output),
+            cost_cents=DREAMINA_VIDEO_COST_CENTS,
+            provider="dreamina",
+            extra={"dry_run": True, "command": display_command},
+        )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="godogen-dreamina.") as tmp:
+        completed = subprocess.run(
+            command,
+            cwd=tmp,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        combined = f"{completed.stdout}\n{completed.stderr}"
+        if completed.returncode != 0:
+            return ProviderResult(
+                False,
+                error=f"Dreamina image2video failed with exit {completed.returncode}: {combined.strip()}",
+                provider="dreamina",
+            )
+
+        if output.exists():
+            return ProviderResult(True, path=str(output), cost_cents=DREAMINA_VIDEO_COST_CENTS, provider="dreamina")
+
+        for path in Path(tmp).rglob("*.mp4"):
+            shutil.copyfile(path, output)
+            return ProviderResult(True, path=str(output), cost_cents=DREAMINA_VIDEO_COST_CENTS, provider="dreamina")
+
+        for candidate in _find_media_candidates(combined, ".mp4"):
+            if _copy_or_download(candidate, output):
+                return ProviderResult(True, path=str(output), cost_cents=DREAMINA_VIDEO_COST_CENTS, provider="dreamina")
+
+        submit_id = _find_submit_id(combined)
+        if submit_id:
+            return ProviderResult(
+                False,
+                cost_cents=DREAMINA_VIDEO_COST_CENTS,
+                error=(
+                    "Dreamina task is pending; no MP4 was available before --poll expired. "
+                    f"Query later with: dreamina query_result --submit_id={submit_id} --download_dir={output.parent}"
+                ),
+                provider="dreamina",
+                extra={"pending": True, "submit_id": submit_id},
+            )
+
+    return ProviderResult(
+        False,
+        cost_cents=DREAMINA_VIDEO_COST_CENTS,
+        error="Dreamina completed without an MP4 path or submit_id; no output was written.",
+        provider="dreamina",
+    )
