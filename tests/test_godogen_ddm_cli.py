@@ -100,6 +100,95 @@ class GodogenDdmCliTests(unittest.TestCase):
         self.assertIn("godot-csharp: ok", proc.stdout)
         self.assertIn("smoke: ok", proc.stdout)
 
+    def test_external_smoke_defaults_to_non_paid_dry_run_without_leaking_keys(self):
+        env = os.environ.copy()
+        env["OPENAI_API_KEY"] = "sk-test-secret-value"
+        env["TRIPO3D_API_KEY"] = "tripo-secret-value"
+
+        with tempfile.TemporaryDirectory(prefix="godogen-ddm-external-dry.") as tmp:
+            proc = subprocess.run(
+                [str(CLI), "external-smoke", "--out", tmp],
+                cwd=REPO_ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("external-smoke: dry-run", proc.stdout)
+            self.assertIn("dreamina-video: dry-run", proc.stdout)
+            self.assertIn("openai-image: dry-run", proc.stdout)
+            self.assertIn("tripo3d-glb: skipped", proc.stdout)
+            self.assertIn("--yes-charge", proc.stdout)
+            self.assertNotIn("sk-test-secret-value", proc.stdout)
+            self.assertNotIn("tripo-secret-value", proc.stdout)
+
+    def test_external_smoke_yes_charge_requires_credentials(self):
+        env = os.environ.copy()
+        env.pop("OPENAI_API_KEY", None)
+        env.pop("TRIPO3D_API_KEY", None)
+        env["GODOGEN_DREAMINA_BIN"] = str(REPO_ROOT / "missing-dreamina")
+
+        proc = subprocess.run(
+            [str(CLI), "external-smoke", "--yes-charge"],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("OPENAI_API_KEY=missing", proc.stderr)
+        self.assertIn("TRIPO3D_API_KEY=missing", proc.stderr)
+        self.assertIn("dreamina=missing", proc.stderr)
+
+    def test_external_smoke_yes_charge_can_run_against_fake_asset_provider(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-ddm-external-paid.") as tmp:
+            root = Path(tmp)
+            fake_asset = root / "fake_asset_gen.py"
+            fake_asset.write_text(
+                "import json, sys\n"
+                "from pathlib import Path\n"
+                "args = sys.argv[1:]\n"
+                "out = Path(args[args.index('-o') + 1])\n"
+                "out.parent.mkdir(parents=True, exist_ok=True)\n"
+                "if args[0] in {'image', 'texture'}:\n"
+                "    out.write_bytes(bytes.fromhex('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c49444154789c63606060000000040001f61738550000000049454e44ae426082'))\n"
+                "elif args[0] == 'video':\n"
+                "    out.write_bytes(b'fake mp4')\n"
+                "elif args[0] == 'glb':\n"
+                "    out.write_bytes(b'fake glb')\n"
+                "print(json.dumps({'ok': True, 'path': str(out), 'cost_cents': 0}))\n"
+            )
+            fake_dreamina = root / "dreamina"
+            fake_dreamina.write_text("#!/bin/sh\nexit 0\n")
+            fake_dreamina.chmod(0o755)
+
+            env = os.environ.copy()
+            env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
+            env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
+            env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["TRIPO3D_API_KEY"] = "tripo-secret-value"
+
+            proc = subprocess.run(
+                [str(CLI), "external-smoke", "--yes-charge", "--out", str(root / "out"), "--poll", "1"],
+                cwd=REPO_ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("external-smoke: paid-run", proc.stdout)
+            self.assertIn("dreamina-video: ok", proc.stdout)
+            self.assertIn("openai-image: ok", proc.stdout)
+            self.assertIn("tripo3d-glb: ok", proc.stdout)
+            self.assertNotIn("sk-test-secret-value", proc.stdout)
+            self.assertNotIn("tripo-secret-value", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

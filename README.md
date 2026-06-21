@@ -80,10 +80,12 @@ bin/godogen-ddm asset texture --prompt "debug grid" -o assets/img/grid.png
 bin/godogen-ddm asset texture --provider openai --dry-run --prompt "wet cobblestone" -o assets/img/cobblestone.png
 bin/godogen-ddm asset video --provider dreamina --dry-run --image assets/img/first.png --prompt "camera push" --duration 4 -o assets/video/clip.mp4
 bin/godogen-ddm smoke
+bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
 ```
 
 `check-env` reports provider env vars as `set` or `unset` only; it does not print key values.
 `smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
+`external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.
 
 ### Bevy docs setup
 

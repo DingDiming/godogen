@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ASSET_GEN="$ROOT/shared/skills/godogen/tools/asset_gen.py"
+ASSET_GEN="${GODOGEN_DDM_ASSET_GEN:-$ROOT/shared/skills/godogen/tools/asset_gen.py}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -12,6 +12,7 @@ Usage:
   godogen-ddm publish --engine godot|bevy|babylon --agent claude|codex --out <dir> [--force] [--video_hook]
   godogen-ddm asset image|texture|video|glb|rig|retarget|resume|set_budget ...
   godogen-ddm smoke
+  godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
 EOF
 }
 
@@ -47,8 +48,23 @@ tool_status() {
 }
 
 dreamina_status() {
-    local dreamina_bin="${GODOGEN_DREAMINA_BIN:-}"
+    local dreamina_bin
+    if ! dreamina_bin="$(dreamina_bin_path)"; then
+        printf 'dreamina: missing\n'
+        return
+    fi
+
     local output
+    output="$("$dreamina_bin" --version 2>&1 || true)"
+    output="$(printf '%s\n' "$output" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | first_line)"
+    if [ -z "$output" ]; then
+        output="available"
+    fi
+    printf 'dreamina: %s\n' "$output"
+}
+
+dreamina_bin_path() {
+    local dreamina_bin="${GODOGEN_DREAMINA_BIN:-}"
     if [ -z "$dreamina_bin" ]; then
         if command -v dreamina >/dev/null 2>&1; then
             dreamina_bin="$(command -v dreamina)"
@@ -58,16 +74,10 @@ dreamina_status() {
     fi
 
     if [ -z "$dreamina_bin" ] || [ ! -x "$dreamina_bin" ]; then
-        printf 'dreamina: missing\n'
-        return
+        return 1
     fi
 
-    output="$("$dreamina_bin" --version 2>&1 || true)"
-    output="$(printf '%s\n' "$output" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | first_line)"
-    if [ -z "$output" ]; then
-        output="available"
-    fi
-    printf 'dreamina: %s\n' "$output"
+    printf '%s\n' "$dreamina_bin"
 }
 
 env_status() {
@@ -231,6 +241,136 @@ cmd_smoke() {
     printf 'smoke: ok (%s)\n' "$tmp"
 }
 
+cmd_external_smoke() {
+    local yes_charge=0
+    local poll=5
+    local out=""
+    local missing=0
+    local first_frame
+    local dreamina_video
+    local openai_image
+    local tripo_glb
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --yes-charge) yes_charge=1; shift ;;
+            --out)
+                if [ $# -lt 2 ]; then
+                    echo "error: --out requires a directory" >&2
+                    exit 1
+                fi
+                out="$2"
+                shift 2
+                ;;
+            --poll)
+                if [ $# -lt 2 ]; then
+                    echo "error: --poll requires seconds" >&2
+                    exit 1
+                fi
+                poll="$2"
+                shift 2
+                ;;
+            -h|--help)
+                cat >&2 <<'EOF'
+Usage:
+  godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
+
+Default mode is non-paid: it creates a procedural first frame and validates
+Dreamina/OpenAI command construction with dry-runs. Tripo3D has no dry-run
+provider path, so it is skipped unless --yes-charge is supplied.
+
+--yes-charge submits real provider tasks and may consume Dreamina credits,
+OpenAI API billing, and Tripo3D credits. It requires Dreamina CLI availability,
+OPENAI_API_KEY, and TRIPO3D_API_KEY.
+EOF
+                return 0
+                ;;
+            *)
+                echo "error: unknown external-smoke option: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    if [ -z "$out" ]; then
+        out="$(mktemp -d /tmp/godogen-ddm-external-smoke.XXXXXX)"
+    fi
+
+    mkdir -p "$out/assets/img" "$out/assets/video" "$out/assets/glb"
+    first_frame="$out/assets/img/external_smoke_first.png"
+    dreamina_video="$out/assets/video/dreamina_external_smoke.mp4"
+    openai_image="$out/assets/img/openai_external_smoke.png"
+    tripo_glb="$out/assets/glb/tripo_external_smoke.glb"
+
+    "$ROOT/bin/godogen-ddm" asset texture \
+        --procedural-kind checker \
+        --prompt "external provider smoke checker first frame" \
+        -o "$first_frame" >/dev/null
+
+    if [ "$yes_charge" -eq 0 ]; then
+        "$ROOT/bin/godogen-ddm" asset video \
+            --provider dreamina --dry-run \
+            --prompt "external smoke camera push" \
+            --image "$first_frame" \
+            --duration 4 --resolution 720p --poll "$poll" \
+            -o "$dreamina_video" >/dev/null
+
+        "$ROOT/bin/godogen-ddm" asset image \
+            --provider openai --dry-run \
+            --prompt "external smoke clean top-down stone tile" \
+            --aspect-ratio 1:1 \
+            -o "$openai_image" >/dev/null
+
+        printf 'external-smoke: dry-run (%s)\n' "$out"
+        printf 'procedural-first-frame: ok %s\n' "$first_frame"
+        printf 'dreamina-video: dry-run %s\n' "$dreamina_video"
+        printf 'openai-image: dry-run %s\n' "$openai_image"
+        printf 'tripo3d-glb: skipped (no non-paid dry-run path)\n'
+        printf 'Use --yes-charge to submit real Dreamina/OpenAI/Tripo3D provider tasks.\n'
+        return 0
+    fi
+
+    if ! dreamina_bin_path >/dev/null 2>&1; then
+        echo "dreamina=missing" >&2
+        missing=1
+    fi
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+        echo "OPENAI_API_KEY=missing" >&2
+        missing=1
+    fi
+    if [ -z "${TRIPO3D_API_KEY:-}" ]; then
+        echo "TRIPO3D_API_KEY=missing" >&2
+        missing=1
+    fi
+    if [ "$missing" -ne 0 ]; then
+        echo "external-smoke: refusing paid provider run until prerequisites are present" >&2
+        return 2
+    fi
+
+    "$ROOT/bin/godogen-ddm" asset video \
+        --provider dreamina \
+        --prompt "external smoke camera push" \
+        --image "$first_frame" \
+        --duration 4 --resolution 720p --poll "$poll" \
+        -o "$dreamina_video" >/dev/null
+
+    "$ROOT/bin/godogen-ddm" asset image \
+        --provider openai \
+        --prompt "external smoke clean top-down stone tile" \
+        --aspect-ratio 1:1 \
+        -o "$openai_image" >/dev/null
+
+    "$ROOT/bin/godogen-ddm" asset glb \
+        --image "$first_frame" \
+        -o "$tripo_glb" >/dev/null
+
+    printf 'external-smoke: paid-run (%s)\n' "$out"
+    printf 'procedural-first-frame: ok %s\n' "$first_frame"
+    printf 'dreamina-video: ok %s\n' "$dreamina_video"
+    printf 'openai-image: ok %s\n' "$openai_image"
+    printf 'tripo3d-glb: ok %s\n' "$tripo_glb"
+}
+
 if [ $# -lt 1 ]; then
     usage
     exit 1
@@ -244,6 +384,7 @@ case "$cmd" in
     publish) cmd_publish "$@" ;;
     asset) cmd_asset "$@" ;;
     smoke) cmd_smoke "$@" ;;
+    external-smoke) cmd_external_smoke "$@" ;;
     -h|--help|help) usage ;;
     *)
         echo "error: unknown command: $cmd" >&2
