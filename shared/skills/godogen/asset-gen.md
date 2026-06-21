@@ -59,6 +59,7 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image \
 `--size` (default `1K`): Grok: `1K`, `2K`. Gemini: `512`, `1K`, `2K`, `4K`.
 `--aspect-ratio` (default `1:1`): varies by backend — both support `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
 `--dry-run`: build a provider command/request without submitting a paid task.
+`--image`: reference image for image-to-image providers; the file must exist before submitting or dry-running the provider command.
 
 Typical combos:
 - `--provider gemini --size 1K` — reference images, character sprites, 3D refs (7¢)

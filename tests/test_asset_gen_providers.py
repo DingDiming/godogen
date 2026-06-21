@@ -244,6 +244,35 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertIn("query_result", result["error"])
             self.assertFalse(output.exists())
 
+    def test_dreamina_image2image_requires_existing_reference_image(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-dreamina-missing-reference.") as tmp:
+            tmp_path = Path(tmp)
+            missing = tmp_path / "refs" / "missing.png"
+            output = tmp_path / "assets" / "img" / "dreamina_edit.png"
+
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "dreamina",
+                    "--dry-run",
+                    "--prompt",
+                    "turn the grass tile into snow",
+                    "--image",
+                    str(missing),
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["provider"], "dreamina")
+            self.assertIn("Reference image not found", result["error"])
+            self.assertIn(str(missing), result["error"])
+            self.assertFalse(output.exists())
+
     def test_dreamina_non_pending_failures_redact_raw_cli_output(self):
         with tempfile.TemporaryDirectory(prefix="godogen-dreamina-redact.") as tmp:
             tmp_path = Path(tmp)

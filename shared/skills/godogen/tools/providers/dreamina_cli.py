@@ -222,6 +222,8 @@ def generate_image(args, output: Path) -> ProviderResult:
             error=f"Dreamina does not support aspect ratio {args.aspect_ratio}. Use: {', '.join(DREAMINA_RATIOS)}",
             provider="dreamina",
         )
+    if args.image and not Path(args.image).exists():
+        return ProviderResult(False, error=f"Reference image not found: {args.image}", provider="dreamina")
 
     command = build_image2image_command(args) if args.image else build_text2image_command(args)
     display_command = _display_command(command)

@@ -32,6 +32,7 @@ Provider selection:
 - `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai`
 - CLI `--provider` overrides environment selection
 - Legacy image `--model grok|gemini` remains available when no provider override is set
+- Image-to-image providers require an existing `--image` reference file before command construction.
 
 ## CLI
 
