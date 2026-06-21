@@ -35,7 +35,7 @@ Each asset costs:
 - Debug texture / grid / flat UI panel / placeholder (procedural): 0 cents
 - Character / reference / 3D ref (Gemini 1K): 7 cents
 - Background: 2 cents (Grok, simple scenic) or 10 cents (Gemini 2K, precise layout)
-- Dreamina/OpenAI images: recorded as 0 cents by Godogen because they bill through provider credits/API billing, not the cents table
+- Dreamina/OpenAI images and videos: recorded as 0 cents by Godogen because they bill through provider credits/API billing, not the cents table
 - 3D model: 37 cents (7 cent Gemini image + 30 cent GLB at medium quality)
 
 Animated sprites cost more — budget carefully:

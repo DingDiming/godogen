@@ -9,12 +9,12 @@ Generate PNG images and MP4 videos through configurable providers, and GLB 3D mo
 | Grok image/video | default, or `--provider grok` | image 2¢, video 5¢/sec | Textures, simple objects, item kits, legacy default video |
 | Gemini image | `--provider gemini` or legacy `--model gemini` | 5-15¢ by size | Precise references, characters, backgrounds, 3D refs |
 | Dreamina image/video | `--provider dreamina` | Dreamina credits, recorded as 0 cents here | Local CLI image/video generation with login state |
-| OpenAI image | `--provider openai` | OpenAI API billing, recorded as 0 cents here | Text-to-image through the OpenAI Images API |
+| OpenAI image/video | `--provider openai` | OpenAI API billing, recorded as 0 cents here | Images API and Videos API (`sora-2`) generation |
 | Procedural image | `--provider procedural` | 0¢ | Debug tiles, grids, flat colors, placeholder sprites, UI panels |
 
 Provider selection:
 - `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural`
-- `GODOGEN_VIDEO_PROVIDER=dreamina|grok`
+- `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai`
 - CLI `--provider` overrides the environment variable.
 - Legacy `--model grok|gemini` still works for image generation when no provider override is set.
 
@@ -22,10 +22,10 @@ Provider selection:
 - **Gemini** — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Gemini costs more but reliably produces what you described.
 - **Grok** — textures, simple objects, item kits, props, simple scenic backgrounds (sky, clouds, abstract). Produces high-quality (even photographic) output but often defaults to common interpretations instead of following specific instructions. Great when exact prompt adherence doesn't matter.
 - **Dreamina** — local CLI-backed image and video generation. Requires local Dreamina login state. Use `--dry-run` first when validating command construction.
-- **OpenAI** — text-to-image via the OpenAI Images API. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
+- **OpenAI** — image generation via the OpenAI Images API and video generation via the OpenAI Videos API. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
 - **Procedural** — programmatic PNG generation. Use for grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder/debug sprites.
 
-Default image provider is still `grok`. Default video provider is still `grok` unless `GODOGEN_VIDEO_PROVIDER` or `--provider` selects Dreamina.
+Default image provider is still `grok`. Default video provider is still `grok` unless `GODOGEN_VIDEO_PROVIDER` or `--provider` selects Dreamina or OpenAI.
 
 ### Gemini sizes and costs
 
@@ -119,12 +119,13 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
   --duration 2 -o assets/video/knight_walk.mp4
 ```
 
-`--provider`: `grok` (default) or `dreamina`
-`--duration` (1-15 seconds), `--resolution` (default `720p`): `720p`, `480p`
-`--poll`: Dreamina only; wait up to N seconds for the async result.
+`--provider`: `grok` (default), `dreamina`, or `openai`
+`--duration`: Grok/Dreamina accept the existing 1-15 second range; OpenAI Videos API accepts only `4`, `8`, or `12`.
+`--resolution` (default `720p`): `720p`, `480p`. OpenAI uses `720p` as `1280x720`; this wrapper rejects `480p` for OpenAI because the official Videos API exposes fixed sizes instead.
+`--poll`: Dreamina/OpenAI only; wait up to N seconds for the async result.
 `--dry-run`: build the provider command without submitting a paid generation task.
 
-Grok has the legacy 5¢/sec estimate. Dreamina consumes Dreamina credits, not cents; Godogen records `cost_cents: 0` for Dreamina so the JSON stays compatible without pretending to know exact credit pricing.
+Grok has the legacy 5¢/sec estimate. Dreamina consumes Dreamina credits, not cents. OpenAI video uses OpenAI API billing, not the cents table. Godogen records `cost_cents: 0` for Dreamina/OpenAI so the JSON stays compatible without pretending to know exact provider pricing.
 
 Dreamina example:
 
@@ -137,6 +138,18 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
 ```
 
 If Dreamina returns a submit id but no media before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with a `dreamina query_result` hint. Do not treat pending as success.
+
+OpenAI example:
+
+```bash
+python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
+  --provider openai --prompt "camera push across a stone floor" \
+  --image assets/img/stone_floor_ref.png \
+  --duration 4 --resolution 720p --poll 120 \
+  -o assets/video/stone_floor_push.mp4
+```
+
+If the OpenAI video job is still `queued` or `in_progress` before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with the OpenAI video id and retrieve/download URLs. Do not treat pending as success.
 
 For Grok, same cost per second at both resolutions — always use `720p`. Fall back to `480p` only if 720p fails (e.g. timeout or API error).
 
@@ -279,6 +292,7 @@ result=$(python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image --prompt "..." -o
 | Retarget | per animation | 10 cents | each clip is a separate task; reuses the rigged task id |
 | Video | --duration N | 5¢ × N seconds | Pose frame as starting image |
 | Video | --provider dreamina | 0 cents in Godogen log | Uses Dreamina credits; async result may be pending |
+| Video | --provider openai | 0 cents in Godogen log | Uses OpenAI API billing; async result may be pending |
 
 A full 3D asset (Gemini 1K image + default GLB) costs 37¢. A rigged biped character with walk/idle/attack is 37¢ + 25¢ rig + 3 × 10¢ retarget = 92¢. A texture (Grok) is 2¢. A background is 2¢ (Grok, simple) or 10¢ (Gemini 2K, precise layout). A 3-second 2D sprite animation costs 24¢ (7¢ Gemini ref + 7¢ pose + 10¢ video); additional animations from the same ref cost 7¢ pose + video.
 

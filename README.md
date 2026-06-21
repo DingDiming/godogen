@@ -44,10 +44,10 @@ Claude Code vs Codex is a publish-time render choice, not a separate source tree
 - Python 3 with pip
 - Provider credentials as environment variables or local login state:
   - `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural`
-  - `GODOGEN_VIDEO_PROVIDER=dreamina|grok`
+  - `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai`
   - `GOOGLE_API_KEY` — [Google AI Studio](https://aistudio.google.com/) only when using Gemini image generation
   - `XAI_API_KEY` — [xAI Grok](https://console.x.ai/home) when using Grok image/video generation
-  - `OPENAI_API_KEY` — [OpenAI](https://platform.openai.com/) only when using OpenAI image generation
+  - `OPENAI_API_KEY` — [OpenAI](https://platform.openai.com/) only when using OpenAI image/video generation
   - Dreamina CLI login state — required when using Dreamina providers
   - `TRIPO3D_API_KEY` — [Tripo3D](https://platform.tripo3d.ai/) for 3D generation
 - System packages from [setup.md](setup.md): `vulkan-tools`, `xvfb`, `ffmpeg`, `imagemagick`, plus platform-specific extras
@@ -85,7 +85,7 @@ bin/godogen-ddm external-smoke --out /tmp/godogen-external-smoke
 
 `check-env` reports provider env vars as `set` or `unset` only; it does not print key values.
 `smoke` verifies Godot/Codex publishing, provider routing, procedural texture output, Dreamina dry-run command construction, and a minimal Godot C# `dotnet build` plus headless project load.
-`external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.
+`external-smoke` defaults to non-paid dry-runs for Dreamina/OpenAI image-video command construction and skips Tripo3D because it has no dry-run path. Use `external-smoke --yes-charge` only when you explicitly want to submit real Dreamina/OpenAI/Tripo3D provider tasks and accept provider credits/API billing.
 
 ### Bevy docs setup
 

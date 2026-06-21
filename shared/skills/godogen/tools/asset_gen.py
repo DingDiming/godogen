@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from providers import dreamina_cli, gemini, grok, openai_image, procedural
+from providers import dreamina_cli, gemini, grok, openai_image, openai_video, procedural
 from providers.common import ProviderResult
 
 TOOLS_DIR = Path(__file__).parent
@@ -113,7 +113,7 @@ def emit_provider_result(result: ProviderResult) -> None:
 # --- Image/video provider routing ---
 
 IMAGE_PROVIDERS = ["grok", "gemini", "dreamina", "openai", "procedural"]
-VIDEO_PROVIDERS = ["grok", "dreamina"]
+VIDEO_PROVIDERS = ["grok", "dreamina", "openai"]
 ALL_SIZES = ["512", "1K", "2K", "4K"]
 ALL_ASPECT_RATIOS = sorted(set(gemini.GEMINI_ASPECT_RATIOS + grok.GROK_ASPECT_RATIOS))
 
@@ -208,6 +208,10 @@ def cmd_video(args):
         elif provider == "dreamina":
             check_budget(dreamina_cli.DREAMINA_VIDEO_COST_CENTS)
             _emit_or_exit(dreamina_cli.generate_video(args, output))
+
+        elif provider == "openai":
+            check_budget(openai_video.OPENAI_VIDEO_COST_CENTS)
+            _emit_or_exit(openai_video.generate_video(args, output))
 
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
@@ -568,7 +572,7 @@ def main():
     p_vid.add_argument("--resolution", choices=["480p", "720p"], default="720p",
                        help="Video resolution. Default: 720p")
     p_vid.add_argument("--poll", type=int, default=0,
-                       help="Dreamina: poll up to N seconds after submit. Default: 0")
+                       help="Dreamina/OpenAI: poll up to N seconds after submit. Default: 0")
     p_vid.add_argument("--dry-run", action="store_true",
                        help="Build provider command without submitting a paid generation task.")
     p_vid.add_argument("-o", "--output", required=True, help="Output MP4 path")

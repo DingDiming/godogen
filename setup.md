@@ -231,10 +231,10 @@ ls ~/.local/share/godot/export_templates/*/android_debug.apk
 Set only the credentials for providers you enable:
 
 - `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural` — optional image provider override
-- `GODOGEN_VIDEO_PROVIDER=dreamina|grok` — optional video provider override
+- `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai` — optional video provider override
 - `GOOGLE_API_KEY` — Gemini image generation
 - `XAI_API_KEY` — xAI Grok image/video generation
-- `OPENAI_API_KEY` — OpenAI image generation
+- `OPENAI_API_KEY` — OpenAI image/video generation
 - Dreamina CLI local login state — Dreamina image/video generation
 - `TRIPO3D_API_KEY` — image-to-3D conversion
 

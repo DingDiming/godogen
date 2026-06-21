@@ -248,6 +248,7 @@ cmd_external_smoke() {
     local missing=0
     local first_frame
     local dreamina_video
+    local openai_video
     local openai_image
     local tripo_glb
 
@@ -299,6 +300,7 @@ EOF
     mkdir -p "$out/assets/img" "$out/assets/video" "$out/assets/glb"
     first_frame="$out/assets/img/external_smoke_first.png"
     dreamina_video="$out/assets/video/dreamina_external_smoke.mp4"
+    openai_video="$out/assets/video/openai_external_smoke.mp4"
     openai_image="$out/assets/img/openai_external_smoke.png"
     tripo_glb="$out/assets/glb/tripo_external_smoke.glb"
 
@@ -321,10 +323,18 @@ EOF
             --aspect-ratio 1:1 \
             -o "$openai_image" >/dev/null
 
+        "$ROOT/bin/godogen-ddm" asset video \
+            --provider openai --dry-run \
+            --prompt "external smoke camera push across a stone floor" \
+            --image "$first_frame" \
+            --duration 4 --resolution 720p --poll "$poll" \
+            -o "$openai_video" >/dev/null
+
         printf 'external-smoke: dry-run (%s)\n' "$out"
         printf 'procedural-first-frame: ok %s\n' "$first_frame"
         printf 'dreamina-video: dry-run %s\n' "$dreamina_video"
         printf 'openai-image: dry-run %s\n' "$openai_image"
+        printf 'openai-video: dry-run %s\n' "$openai_video"
         printf 'tripo3d-glb: skipped (no non-paid dry-run path)\n'
         printf 'Use --yes-charge to submit real Dreamina/OpenAI/Tripo3D provider tasks.\n'
         return 0
@@ -360,6 +370,13 @@ EOF
         --aspect-ratio 1:1 \
         -o "$openai_image" >/dev/null
 
+    "$ROOT/bin/godogen-ddm" asset video \
+        --provider openai \
+        --prompt "external smoke camera push across a stone floor" \
+        --image "$first_frame" \
+        --duration 4 --resolution 720p --poll "$poll" \
+        -o "$openai_video" >/dev/null
+
     "$ROOT/bin/godogen-ddm" asset glb \
         --image "$first_frame" \
         -o "$tripo_glb" >/dev/null
@@ -368,6 +385,7 @@ EOF
     printf 'procedural-first-frame: ok %s\n' "$first_frame"
     printf 'dreamina-video: ok %s\n' "$dreamina_video"
     printf 'openai-image: ok %s\n' "$openai_image"
+    printf 'openai-video: ok %s\n' "$openai_video"
     printf 'tripo3d-glb: ok %s\n' "$tripo_glb"
 }
 

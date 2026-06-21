@@ -307,6 +307,116 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(request["payload"]["images"][0]["image_url"], f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}")
             self.assertEqual(request["payload"]["output_format"], "png")
 
+    def test_openai_video_dry_run_builds_videos_api_request(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-openai-video.") as tmp:
+            first_frame = Path(tmp) / "assets" / "img" / "first.png"
+            output = Path(tmp) / "assets" / "video" / "openai.mp4"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "video",
+                    "--provider",
+                    "openai",
+                    "--dry-run",
+                    "--prompt",
+                    "slow camera push across a stone floor",
+                    "--image",
+                    str(first_frame),
+                    "--duration",
+                    "4",
+                    "--resolution",
+                    "720p",
+                    "--poll",
+                    "2",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertEqual(result["path"], str(output))
+            request = result["request"]
+            self.assertEqual(request["url"], "https://api.openai.com/v1/videos")
+            self.assertEqual(request["poll_url"], "https://api.openai.com/v1/videos/{video_id}")
+            self.assertEqual(request["download_url"], "https://api.openai.com/v1/videos/{video_id}/content")
+            self.assertEqual(request["payload"]["model"], "sora-2")
+            self.assertEqual(request["payload"]["prompt"], "slow camera push across a stone floor")
+            self.assertEqual(request["payload"]["seconds"], "4")
+            self.assertEqual(request["payload"]["size"], "1280x720")
+            self.assertEqual(
+                request["payload"]["input_reference"]["image_url"],
+                f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}",
+            )
+
+    def test_openai_video_env_provider_dry_run(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-openai-video-env.") as tmp:
+            first_frame = Path(tmp) / "assets" / "img" / "first.png"
+            output = Path(tmp) / "assets" / "video" / "openai.mp4"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "video",
+                    "--dry-run",
+                    "--prompt",
+                    "slow camera push",
+                    "--image",
+                    str(first_frame),
+                    "--duration",
+                    "8",
+                    "--resolution",
+                    "720p",
+                    "-o",
+                    str(output),
+                ],
+                env={"GODOGEN_VIDEO_PROVIDER": "openai"},
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertEqual(result["request"]["payload"]["seconds"], "8")
+
+    def test_openai_video_rejects_unsupported_duration(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-openai-video-duration.") as tmp:
+            first_frame = Path(tmp) / "assets" / "img" / "first.png"
+            output = Path(tmp) / "assets" / "video" / "openai.mp4"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "video",
+                    "--provider",
+                    "openai",
+                    "--dry-run",
+                    "--prompt",
+                    "slow camera push",
+                    "--image",
+                    str(first_frame),
+                    "--duration",
+                    "5",
+                    "--resolution",
+                    "720p",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertIn("4, 8, 12", result["error"])
+
     def test_texture_defaults_to_procedural_tile(self):
         with tempfile.TemporaryDirectory(prefix="godogen-texture-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "tile.png"
