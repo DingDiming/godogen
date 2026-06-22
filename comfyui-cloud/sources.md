@@ -20,6 +20,7 @@ Key facts:
 - Outputs are downloaded through `/api/view`, which redirects to a temporary signed URL.
 - API access requires paid Comfy Cloud tier; free tier does not include API access.
 - API jobs use the same Comfy Cloud credits as the web UI.
+- The Comfy API key used for Partner Nodes can also be used as the hosted Cloud API `X-API-Key` header.
 - Concurrency is subscription-tier dependent.
 - The API is experimental and may change.
 
@@ -51,6 +52,7 @@ Key facts:
 - API nodes expose hidden `AUTH_TOKEN_COMFY_ORG` and `API_KEY_COMFY_ORG` fields.
 - Browser login supplies an auth token for UI-run workflows, but direct CLI/API submission does not automatically reuse that browser login.
 - Programmatic Partner/API node submission should pass a Comfy account API key through `extra_data.api_key_comfy_org`; Godogen reads this from `COMFY_API_KEY` and never stores it in sidecars.
+- ComfyUI Desktop is not required for programmatic execution. A source install that exposes `POST /prompt` can run paid Partner/API nodes when the payload includes `extra_data.api_key_comfy_org`.
 - `OpenRouterLLMNode` uses `COMFY_DYNAMICCOMBO_V3`; API workflow input should set `inputs.model` to the selected model string and nested option fields as dotted keys such as `inputs.model.reasoning_effort`.
 - A direct `/prompt` probe without `COMFY_API_KEY` against a paid Partner node returned `Unauthorized: Please login first to use this node.`, confirming that UI login is not sufficient for Codex CLI automation.
 

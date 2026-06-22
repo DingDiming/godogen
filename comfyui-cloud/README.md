@@ -61,7 +61,9 @@ Only one primary Comfy account key should be needed by Godogen for automated Par
 
 `COMFY_CLOUD_API_KEY` remains supported for the hosted Comfy Cloud API path and as a compatibility fallback. Comfy account credits/subscription are required for Cloud API and paid Partner Nodes. Vendor-specific model access should be handled inside ComfyUI Partner Nodes and workflow profiles, not exposed as separate Godogen provider keys.
 
-Browser login in the local ComfyUI UI is enough for manual UI runs, but it is not enough for CLI automation through `asset_gen.py`. Programmatic paid Partner/API node submissions require `COMFY_API_KEY` in the environment so Codex can submit `/prompt` without reading browser tokens.
+Browser login in the local ComfyUI UI is enough for manual UI runs because the frontend packages account credentials into workflow submissions. Codex/CLI automation should not read browser tokens; it should pass `COMFY_API_KEY` in `extra_data.api_key_comfy_org` when submitting to the local `/prompt` API.
+
+ComfyUI Desktop is not required for this integration. The current source/local-server install is sufficient as long as it exposes the ComfyUI webserver API and the built-in Partner/API nodes. Desktop is a convenience package for installation, updates, and UI login, not the backend requirement.
 
 Direct `TRIPO3D_API_KEY` may remain temporarily as fallback while the ComfyUI Cloud 3D profiles are validated.
 

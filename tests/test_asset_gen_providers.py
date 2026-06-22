@@ -75,7 +75,8 @@ class AssetGenProviderTests(unittest.TestCase):
                     "top down racing car reference",
                     "-o",
                     str(output),
-                ]
+                ],
+                env={"COMFY_API_KEY": "comfy-secret-value"},
             )
 
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -88,6 +89,8 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(result["request"]["method"], "POST")
             self.assertEqual(result["request"]["url"], "https://cloud.comfy.org/api/prompt")
             self.assertIn("prompt", result["request"]["json"])
+            self.assertEqual(result["request"]["json"]["extra_data"]["api_key_comfy_org"], "<set>")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
 
     def test_comfy_image_submission_records_pending_sidecar(self):
         with tempfile.TemporaryDirectory(prefix="godogen-comfy-pending.") as tmp:
@@ -105,7 +108,7 @@ class AssetGenProviderTests(unittest.TestCase):
                     str(output),
                 ],
                 env={
-                    "COMFY_CLOUD_API_KEY": "comfy-secret-value",
+                    "COMFY_API_KEY": "comfy-secret-value",
                     "GODOGEN_COMFY_FAKE_PROMPT_ID": "prompt-123",
                 },
             )
@@ -151,7 +154,7 @@ class AssetGenProviderTests(unittest.TestCase):
                     str(output),
                 ],
                 env={
-                    "COMFY_CLOUD_API_KEY": "comfy-secret-value",
+                    "COMFY_API_KEY": "comfy-secret-value",
                     "GODOGEN_COMFY_FAKE_STATUS": "completed",
                     "GODOGEN_COMFY_FAKE_OUTPUT_BYTES_HEX": PNG_1X1.hex(),
                 },

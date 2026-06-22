@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,23 +14,45 @@ from .comfy_profiles import load_profile
 BASE_URL = "https://cloud.comfy.org"
 
 
+def _account_api_key() -> str:
+    return os.environ.get("COMFY_API_KEY") or os.environ.get("COMFY_CLOUD_API_KEY") or ""
+
+
+def _build_payload(profile: dict, args) -> dict:
+    payload = {
+        "prompt": {
+            "_profile": profile["id"],
+            "_workflow": profile["workflow"],
+            "_inputs": {
+                "prompt": args.prompt,
+                "image": getattr(args, "image", None),
+                "duration": getattr(args, "duration", None),
+                "resolution": getattr(args, "resolution", None),
+            },
+        }
+    }
+    key = _account_api_key()
+    if key:
+        payload["extra_data"] = {
+            "api_key_comfy_org": key,
+        }
+    return payload
+
+
+def _sanitize_payload(payload: dict) -> dict:
+    sanitized = json.loads(json.dumps(payload))
+    extra = sanitized.get("extra_data")
+    if isinstance(extra, dict) and extra.get("api_key_comfy_org"):
+        extra["api_key_comfy_org"] = "<set>"
+    return sanitized
+
+
 def build_dry_run_request(profile_id: str, args) -> dict:
     profile = load_profile(profile_id)
     return {
         "method": "POST",
         "url": f"{BASE_URL}/api/prompt",
-        "json": {
-            "prompt": {
-                "_profile": profile["id"],
-                "_workflow": profile["workflow"],
-                "_inputs": {
-                    "prompt": args.prompt,
-                    "image": getattr(args, "image", None),
-                    "duration": getattr(args, "duration", None),
-                    "resolution": getattr(args, "resolution", None),
-                },
-            }
-        },
+        "json": _sanitize_payload(_build_payload(profile, args)),
     }
 
 
@@ -77,7 +100,7 @@ def generate_image(args, output: Path, task_type: str = "image") -> ProviderResu
             },
         )
 
-    prompt_id = comfy_http.submit_prompt(request["json"])
+    prompt_id = comfy_http.submit_prompt(_build_payload(load_profile(profile_id), args))
     sidecar = write_sidecar(
         output,
         {

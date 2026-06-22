@@ -10,9 +10,9 @@ BASE_URL = "https://cloud.comfy.org"
 
 
 def api_key() -> str:
-    key = os.environ.get("COMFY_CLOUD_API_KEY")
+    key = os.environ.get("COMFY_CLOUD_API_KEY") or os.environ.get("COMFY_API_KEY")
     if not key:
-        raise ValueError("COMFY_CLOUD_API_KEY is required for Comfy Cloud submission")
+        raise ValueError("COMFY_API_KEY or COMFY_CLOUD_API_KEY is required for Comfy Cloud submission")
     return key
 
 

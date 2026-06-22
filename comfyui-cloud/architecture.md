@@ -26,7 +26,7 @@ Codex should not become a thin wrapper around Comfy. Comfy should not become the
 Use two explicit Comfy providers under the existing asset generator system:
 
 - `comfy-local`: submits workflow API JSON to a local ComfyUI server, defaulting to `http://127.0.0.1:8000`; paid Partner/API nodes require `COMFY_API_KEY`.
-- `comfy-cloud`: submits to hosted Comfy Cloud API; it remains useful when the hosted API tier is intentionally used.
+- `comfy-cloud`: submits to hosted Comfy Cloud API; it remains useful when the hosted API tier is intentionally used. `COMFY_API_KEY` is the primary key name, with `COMFY_CLOUD_API_KEY` supported as a hosted-api compatibility alias.
 
 Candidate source files:
 
