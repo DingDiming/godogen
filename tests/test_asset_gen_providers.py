@@ -89,6 +89,40 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(result["request"]["url"], "https://cloud.comfy.org/api/prompt")
             self.assertIn("prompt", result["request"]["json"])
 
+    def test_comfy_image_submission_records_pending_sidecar(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-pending.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "ref.png"
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "comfy-cloud",
+                    "--workflow",
+                    "ref-image",
+                    "--prompt",
+                    "top down racing car reference",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_CLOUD_API_KEY": "comfy-secret-value",
+                    "GODOGEN_COMFY_FAKE_PROMPT_ID": "prompt-123",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "comfy-cloud")
+            self.assertEqual(result["prompt_id"], "prompt-123")
+            sidecar = Path(result["sidecar"])
+            self.assertTrue(sidecar.exists())
+            data = json.loads(sidecar.read_text())
+            self.assertEqual(data["status"], "pending")
+            self.assertEqual(data["prompt_id"], "prompt-123")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
+
     def test_procedural_env_provider_generates_png_without_external_sdks(self):
         with tempfile.TemporaryDirectory(prefix="godogen-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "checker.png"
