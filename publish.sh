@@ -218,6 +218,11 @@ cp "$REPO_ROOT/bin/godogen-ddm" "$TARGET/tools/godogen-ddm"
 chmod +x "$TARGET/tools/godogen-ddm"
 echo "Created tools/godogen-ddm"
 
+if [ -d "$REPO_ROOT/comfyui-cloud" ]; then
+    rsync -a --delete "$REPO_ROOT/comfyui-cloud/" "$TARGET/comfyui-cloud/"
+    echo "Created comfyui-cloud workflow profiles"
+fi
+
 if [ "$VIDEO_HOOK" -eq 1 ]; then
     rsync -a "$REPO_ROOT/shared/hooks/stop_post_task_gate.py" \
         "$TARGET/$HOOK_CONFIG_DIR/hooks/"

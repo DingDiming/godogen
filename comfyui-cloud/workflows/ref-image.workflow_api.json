@@ -1,0 +1,22 @@
+{
+  "1": {
+    "class_type": "WanTextToImageApi",
+    "inputs": {
+      "model": "wan2.5-t2i-preview",
+      "prompt": "single red cube on white background",
+      "negative_prompt": "",
+      "width": 1024,
+      "height": 1024,
+      "seed": 0,
+      "prompt_extend": false,
+      "watermark": false
+    }
+  },
+  "2": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["1", 0],
+      "filename_prefix": "godogen/ref_image"
+    }
+  }
+}

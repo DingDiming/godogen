@@ -4,11 +4,11 @@
   "workflow": "workflows/ref-image.workflow_api.json",
   "inputs": {
     "prompt": {
-      "node": "6",
-      "field": "inputs.text"
+      "node": "1",
+      "field": "inputs.prompt"
     },
     "seed": {
-      "node": "3",
+      "node": "1",
       "field": "inputs.seed"
     }
   },

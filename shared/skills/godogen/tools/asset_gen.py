@@ -5,6 +5,7 @@ Subcommands:
   image     Generate a PNG from a prompt
   texture   Generate a texture PNG via procedural or image providers
   video     Generate MP4 video from prompt + reference image
+  model3d   Generate a GLB model via a Comfy workflow
   glb       Convert a PNG to a static GLB (30¢ default, 60¢ hd)
   rig       Convert a PNG to a rigged biped GLB (preset + 25¢)
   retarget  Apply a biped preset animation to a rigged GLB (10¢)
@@ -115,6 +116,7 @@ def emit_provider_result(result: ProviderResult) -> None:
 IMAGE_PROVIDERS = ["dreamina", "procedural", "codex", "comfy-cloud", "comfy-local"]
 VIDEO_PROVIDERS = ["dreamina", "codex", "comfy-cloud", "comfy-local"]
 ANALYZE_PROVIDERS = ["comfy-local"]
+MODEL3D_PROVIDERS = ["comfy-cloud", "comfy-local"]
 ALL_SIZES = ["512", "1K", "2K", "4K"]
 ALL_ASPECT_RATIOS = [
     "1:1",
@@ -239,6 +241,31 @@ def cmd_analyze(args):
         if provider == "comfy-local":
             check_budget(0)
             _emit_or_exit(comfy_local.generate_analyze(args, output))
+    except Exception as e:
+        result_json(False, error=str(e), provider=provider)
+        sys.exit(1)
+
+
+def cmd_model3d(args):
+    provider = _selected_provider(args.provider, "GODOGEN_MODEL3D_PROVIDER", "comfy-local")
+    if provider not in MODEL3D_PROVIDERS:
+        _fail_provider_error(f"Unknown model3d provider: {provider}. Use: {', '.join(MODEL3D_PROVIDERS)}")
+
+    image_path = Path(args.image)
+    if not image_path.exists():
+        result_json(False, error=f"Image not found: {image_path}", provider=provider)
+        sys.exit(1)
+
+    output = Path(args.output)
+    print(f"Generating 3D model ({provider})...", file=sys.stderr)
+    try:
+        if provider == "comfy-cloud":
+            check_budget(0)
+            _emit_or_exit(comfy_cloud.generate_image(args, output, task_type="model3d"))
+
+        elif provider == "comfy-local":
+            check_budget(0)
+            _emit_or_exit(comfy_local.generate_model3d(args, output))
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
         sys.exit(1)
@@ -641,6 +668,23 @@ def main():
                       help="Build provider request without submitting a paid workflow task.")
     p_an.add_argument("-o", "--output", required=True, help="Output text/JSON path")
     p_an.set_defaults(func=cmd_analyze)
+
+    p_m3d = sub.add_parser("model3d", help="Generate a GLB model via a Comfy workflow")
+    p_m3d.add_argument("--provider", choices=MODEL3D_PROVIDERS, default=None,
+                       help="Provider override. Env fallback: GODOGEN_MODEL3D_PROVIDER. Default: comfy-local.")
+    p_m3d.add_argument("--workflow", default="tripo-image-to-3d",
+                       help="Comfy workflow profile id. Default: tripo-image-to-3d.")
+    p_m3d.add_argument("--image", required=True, help="Reference image path")
+    p_m3d.add_argument("--prompt", default=None,
+                       help="Optional model prompt for workflows that expose it.")
+    p_m3d.add_argument("--face-limit", dest="face_limit", type=int, default=None,
+                       help="Face count/limit override for workflows that expose it.")
+    p_m3d.add_argument("--seed", type=int, default=None,
+                       help="Seed for workflows that expose it.")
+    p_m3d.add_argument("--dry-run", action="store_true",
+                       help="Build provider request without submitting a paid workflow task.")
+    p_m3d.add_argument("-o", "--output", required=True, help="Output GLB path")
+    p_m3d.set_defaults(func=cmd_model3d)
 
     p_glb = sub.add_parser("glb", help="Convert PNG to static GLB (30¢ default, 60¢ hd)")
     p_glb.add_argument("--image", required=True, help="Input PNG path")

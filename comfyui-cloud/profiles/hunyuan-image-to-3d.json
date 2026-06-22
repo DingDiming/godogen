@@ -1,0 +1,31 @@
+{
+  "id": "hunyuan-image-to-3d",
+  "asset_kind": "model3d",
+  "workflow": "workflows/hunyuan-image-to-3d.workflow_api.json",
+  "inputs": {
+    "image": {
+      "node": "1",
+      "field": "inputs.image",
+      "upload": true
+    },
+    "face_limit": {
+      "node": "2",
+      "field": "inputs.face_count",
+      "default": 500000
+    },
+    "seed": {
+      "node": "2",
+      "field": "inputs.seed",
+      "default": 0
+    }
+  },
+  "outputs": [
+    {
+      "node": "3",
+      "kind": "model3d",
+      "extensions": [".glb"]
+    }
+  ],
+  "timeout_seconds": 1200,
+  "paid": true
+}

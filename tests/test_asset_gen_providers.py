@@ -57,8 +57,34 @@ class AssetGenProviderTests(unittest.TestCase):
         self.assertEqual(profile["id"], "ref-image")
         self.assertEqual(profile["asset_kind"], "image")
         self.assertEqual(profile["workflow"], "workflows/ref-image.workflow_api.json")
-        self.assertEqual(profile["inputs"]["prompt"]["node"], "6")
+        self.assertEqual(profile["inputs"]["prompt"]["node"], "1")
         self.assertEqual(profile["outputs"][0]["kind"], "image")
+        self.assertTrue((REPO_ROOT / "comfyui-cloud" / profile["workflow"]).exists())
+
+    def test_comfy_profile_loader_reads_image_to_video_profile(self):
+        sys.path.insert(0, str(REPO_ROOT / "shared" / "skills" / "godogen" / "tools"))
+        from providers.comfy_profiles import load_profile
+
+        profile = load_profile("image-to-video")
+
+        self.assertEqual(profile["id"], "image-to-video")
+        self.assertEqual(profile["asset_kind"], "video")
+        self.assertEqual(profile["inputs"]["image"]["upload"], True)
+        self.assertEqual(profile["outputs"][0]["kind"], "video")
+        self.assertTrue((REPO_ROOT / "comfyui-cloud" / profile["workflow"]).exists())
+
+    def test_comfy_profile_loader_reads_tripo_model3d_profile(self):
+        sys.path.insert(0, str(REPO_ROOT / "shared" / "skills" / "godogen" / "tools"))
+        from providers.comfy_profiles import load_profile
+
+        profile = load_profile("tripo-image-to-3d")
+
+        self.assertEqual(profile["id"], "tripo-image-to-3d")
+        self.assertEqual(profile["asset_kind"], "model3d")
+        self.assertEqual(profile["inputs"]["image"]["upload"], True)
+        self.assertEqual(profile["outputs"][0]["kind"], "model3d")
+        self.assertIn(".glb", profile["outputs"][0]["extensions"])
+        self.assertTrue((REPO_ROOT / "comfyui-cloud" / profile["workflow"]).exists())
 
     def test_comfy_image_dry_run_builds_cloud_prompt_request(self):
         with tempfile.TemporaryDirectory(prefix="godogen-comfy-dry.") as tmp:
@@ -208,6 +234,110 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(result["request"]["json"]["extra_data"]["api_key_comfy_org"], "<set>")
             self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
 
+    def test_comfy_local_image_dry_run_builds_partner_image_workflow(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-image.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "smoke.png"
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "ref-image",
+                    "--dry-run",
+                    "--prompt",
+                    "single red cube on white background",
+                    "-o",
+                    str(output),
+                ],
+                env={"COMFY_API_KEY": "comfy-secret-value"},
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            workflow = result["request"]["json"]["prompt"]
+            self.assertEqual(workflow["1"]["class_type"], "WanTextToImageApi")
+            self.assertEqual(workflow["1"]["inputs"]["prompt"], "single red cube on white background")
+            self.assertEqual(workflow["2"]["class_type"], "SaveImage")
+            self.assertEqual(result["request"]["json"]["extra_data"]["api_key_comfy_org"], "<set>")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
+
+    def test_comfy_local_video_dry_run_builds_image_upload_workflow(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-video.") as tmp:
+            first_frame = Path(tmp) / "refs" / "first.png"
+            output = Path(tmp) / "assets" / "video" / "smoke.mp4"
+            first_frame.parent.mkdir(parents=True)
+            first_frame.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "video",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "image-to-video",
+                    "--dry-run",
+                    "--prompt",
+                    "slow clockwise turntable, static camera",
+                    "--image",
+                    str(first_frame),
+                    "--duration",
+                    "5",
+                    "--resolution",
+                    "480p",
+                    "-o",
+                    str(output),
+                ],
+                env={"COMFY_API_KEY": "comfy-secret-value"},
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            workflow = result["request"]["json"]["prompt"]
+            self.assertEqual(workflow["1"]["class_type"], "LoadImage")
+            self.assertEqual(workflow["1"]["inputs"]["image"], str(first_frame))
+            self.assertEqual(workflow["2"]["class_type"], "WanImageToVideoApi")
+            self.assertEqual(workflow["2"]["inputs"]["duration"], 5)
+            self.assertEqual(workflow["2"]["inputs"]["resolution"], "480P")
+            self.assertEqual(workflow["3"]["class_type"], "SaveVideo")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
+
+    def test_comfy_local_model3d_dry_run_builds_tripo_workflow(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-model.") as tmp:
+            source = Path(tmp) / "refs" / "model_ref.png"
+            output = Path(tmp) / "assets" / "models" / "smoke.glb"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(PNG_1X1)
+
+            proc = run_asset_gen(
+                [
+                    "model3d",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "tripo-image-to-3d",
+                    "--dry-run",
+                    "--image",
+                    str(source),
+                    "-o",
+                    str(output),
+                ],
+                env={"COMFY_API_KEY": "comfy-secret-value"},
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            workflow = result["request"]["json"]["prompt"]
+            self.assertEqual(workflow["1"]["class_type"], "LoadImage")
+            self.assertEqual(workflow["1"]["inputs"]["image"], str(source))
+            self.assertEqual(workflow["2"]["class_type"], "TripoImageToModelNode")
+            self.assertEqual(workflow["2"]["inputs"]["face_limit"], 20000)
+            self.assertEqual(result["task_type"], "model3d")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
+
     def test_comfy_local_paid_profile_requires_api_key_for_submission(self):
         with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-auth.") as tmp:
             output = Path(tmp) / "refs" / "llm_smoke.txt"
@@ -270,6 +400,42 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(data["status"], "pending")
             self.assertEqual(data["prompt_id"], "local-prompt-123")
             self.assertEqual(data["endpoint"], "http://127.0.0.1:8000")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
+
+    def test_comfy_local_model3d_submission_records_pending_sidecar_without_leaking_key(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-model-pending.") as tmp:
+            source = Path(tmp) / "refs" / "model_ref.png"
+            output = Path(tmp) / "assets" / "models" / "smoke.glb"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(PNG_1X1)
+            proc = run_asset_gen(
+                [
+                    "model3d",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "tripo-image-to-3d",
+                    "--image",
+                    str(source),
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_API_KEY": "comfy-secret-value",
+                    "GODOGEN_COMFY_FAKE_PROMPT_ID": "model-prompt-123",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "comfy-local")
+            self.assertEqual(result["prompt_id"], "model-prompt-123")
+            sidecar = Path(result["sidecar"])
+            data = json.loads(sidecar.read_text())
+            self.assertEqual(data["profile"], "tripo-image-to-3d")
+            self.assertEqual(data["task_type"], "model3d")
             self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
 
     def test_comfy_local_resume_writes_completed_text_output(self):

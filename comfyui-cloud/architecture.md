@@ -61,13 +61,14 @@ comfyui-cloud/
     ref-image.json
     image-to-video.json
     hunyuan-image-to-3d.json
-    hunyuan-multiview-to-3d.json
     tripo-image-to-3d.json
-    llm-vision-review.json
+    llm-smoke.json
   workflows/
     ref-image.workflow_api.json
     image-to-video.workflow_api.json
     hunyuan-image-to-3d.workflow_api.json
+    tripo-image-to-3d.workflow_api.json
+    llm-smoke.workflow_api.json
 ```
 
 Profiles describe how Godogen fills a Comfy workflow:
@@ -78,11 +79,11 @@ Profiles describe how Godogen fills a Comfy workflow:
   "asset_kind": "model3d",
   "workflow": "workflows/hunyuan-image-to-3d.workflow_api.json",
   "inputs": {
-    "prompt": {"node": "12", "field": "inputs.prompt"},
-    "image": {"node": "5", "field": "inputs.image"}
+    "image": {"node": "1", "field": "inputs.image", "upload": true},
+    "face_limit": {"node": "2", "field": "inputs.face_count", "default": 500000}
   },
   "outputs": [
-    {"node": "42", "kind": "model", "extensions": [".glb", ".obj", ".fbx"]}
+    {"node": "3", "kind": "model3d", "extensions": [".glb"]}
   ],
   "timeout_seconds": 1200,
   "paid": true
@@ -103,16 +104,17 @@ asset_gen.py image \
   -o assets/img/ref.png
 
 asset_gen.py video \
-  --provider comfy-cloud \
+  --provider comfy-local \
   --workflow image-to-video \
   --image assets/img/first.png \
   --prompt "..." \
-  --duration 4 \
+  --duration 5 \
+  --resolution 480p \
   -o assets/video/clip.mp4
 
 asset_gen.py model3d \
-  --provider comfy-cloud \
-  --workflow hunyuan-image-to-3d \
+  --provider comfy-local \
+  --workflow tripo-image-to-3d \
   --image assets/img/model_ref.png \
   -o assets/glb/model.glb
 
@@ -123,7 +125,7 @@ asset_gen.py analyze \
   -o refs/review/llm_smoke.txt
 ```
 
-If adding `model3d` is too broad for the first coding slice, start with `analyze --provider comfy-local --dry-run`, `image --provider comfy-cloud --dry-run`, and `texture --provider comfy-cloud --dry-run`, then add other kinds.
+The legacy direct Tripo3D `glb` / `rig` / `retarget` commands remain available as fallback, but the Comfy-backed `model3d` route is the preferred unified model path.
 
 ## Sidecar Contract
 

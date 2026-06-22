@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .common import ProviderResult
+from .common import mime_for_image
 from .comfy_outputs import first_output_file, first_text_output
 from .comfy_profiles import load_profile, repo_root
 
@@ -67,26 +68,33 @@ def _set_field(workflow: dict, node_id: str, field: str, value) -> None:
 
 
 def _arg_value(args, input_name: str, binding: dict):
+    value = None
     if hasattr(args, input_name):
         value = getattr(args, input_name)
-        if value is not None:
-            return value
-    return binding.get("default")
+    if value is None:
+        value = binding.get("default")
+    mapping = binding.get("map")
+    if isinstance(mapping, dict) and value in mapping:
+        return mapping[value]
+    return value
 
 
-def _build_workflow(profile: dict, args) -> dict:
+def _build_workflow(profile: dict, args, uploaded_inputs: dict[str, str] | None = None) -> dict:
+    uploaded_inputs = uploaded_inputs or {}
     workflow = json.loads(_workflow_path(profile).read_text())
     for input_name, binding in profile.get("inputs", {}).items():
-        value = _arg_value(args, input_name, binding)
+        value = uploaded_inputs.get(input_name)
+        if value is None:
+            value = _arg_value(args, input_name, binding)
         if value is None:
             continue
         _set_field(workflow, binding["node"], binding["field"], value)
     return workflow
 
 
-def _request_payload(profile: dict, args, include_key: bool = True) -> dict:
+def _request_payload(profile: dict, args, include_key: bool = True, uploaded_inputs: dict[str, str] | None = None) -> dict:
     payload = {
-        "prompt": _build_workflow(profile, args),
+        "prompt": _build_workflow(profile, args, uploaded_inputs=uploaded_inputs),
         "client_id": f"godogen-{uuid.uuid4()}",
     }
     key = account_api_key()
@@ -108,12 +116,69 @@ def _sanitized_payload(payload: dict) -> dict:
 
 def build_dry_run_request(profile_id: str, args) -> dict:
     profile = load_profile(profile_id)
-    payload = _request_payload(profile, args)
+    payload = _request_payload(profile, args, uploaded_inputs=_resolve_upload_inputs(profile, args, base_url(), dry_run=True))
     return {
         "method": "POST",
         "url": f"{base_url()}/prompt",
         "json": _sanitized_payload(payload),
     }
+
+
+def upload_image(image_path: Path, endpoint: str) -> str:
+    if os.environ.get("GODOGEN_COMFY_FAKE_PROMPT_ID"):
+        return os.environ.get("GODOGEN_COMFY_FAKE_UPLOAD_NAME") or image_path.name
+
+    filename = f"godogen_{uuid.uuid4().hex}_{image_path.name}"
+    boundary = f"----godogen-comfy-{uuid.uuid4().hex}"
+    body = bytearray()
+
+    def add_field(name: str, value: str) -> None:
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+        body.extend(str(value).encode())
+        body.extend(b"\r\n")
+
+    add_field("type", "input")
+    add_field("overwrite", "true")
+    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(
+        (
+            f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+            f"Content-Type: {mime_for_image(image_path)}\r\n\r\n"
+        ).encode()
+    )
+    body.extend(image_path.read_bytes())
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode())
+
+    request = urllib.request.Request(
+        f"{endpoint}/upload/image",
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=120) as response:
+        parsed = json.loads(response.read().decode("utf-8"))
+    subfolder = parsed.get("subfolder") or ""
+    name = parsed.get("name") or filename
+    if subfolder:
+        return f"{subfolder}/{name}"
+    return name
+
+
+def _resolve_upload_inputs(profile: dict, args, endpoint: str, dry_run: bool) -> dict[str, str]:
+    uploaded: dict[str, str] = {}
+    for input_name, binding in profile.get("inputs", {}).items():
+        if not binding.get("upload"):
+            continue
+        value = _arg_value(args, input_name, binding)
+        if value is None:
+            continue
+        image_path = Path(value)
+        if not image_path.exists():
+            raise FileNotFoundError(f"Reference image not found: {image_path}")
+        uploaded[input_name] = str(image_path) if dry_run else upload_image(image_path, endpoint)
+    return uploaded
 
 
 def _profile_extensions(profile: dict) -> list[str]:
@@ -208,7 +273,7 @@ def generate_output(args, output: Path, task_type: str) -> ProviderResult:
     request = {
         "method": "POST",
         "url": f"{base_url()}/prompt",
-        "json": _sanitized_payload(_request_payload(profile, args)),
+        "json": _sanitized_payload(_request_payload(profile, args, uploaded_inputs=_resolve_upload_inputs(profile, args, base_url(), dry_run=True))),
     }
     if getattr(args, "dry_run", False):
         return ProviderResult(
@@ -232,7 +297,8 @@ def generate_output(args, output: Path, task_type: str) -> ProviderResult:
         )
 
     endpoint = base_url()
-    prompt_id = submit_prompt(_request_payload(profile, args), endpoint)
+    uploaded_inputs = _resolve_upload_inputs(profile, args, endpoint, dry_run=False)
+    prompt_id = submit_prompt(_request_payload(profile, args, uploaded_inputs=uploaded_inputs), endpoint)
     sidecar = write_sidecar(
         output,
         {
@@ -267,6 +333,10 @@ def generate_image(args, output: Path, task_type: str = "image") -> ProviderResu
 
 def generate_video(args, output: Path) -> ProviderResult:
     return generate_output(args, output, "video")
+
+
+def generate_model3d(args, output: Path) -> ProviderResult:
+    return generate_output(args, output, "model3d")
 
 
 def generate_analyze(args, output: Path) -> ProviderResult:

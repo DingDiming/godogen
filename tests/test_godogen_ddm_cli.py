@@ -10,6 +10,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLI = REPO_ROOT / "bin" / "godogen-ddm"
 
+PNG_1X1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753"
+    "de0000000c49444154789c63606060000000040001f61738550000000049454e44ae426082"
+)
+
 
 class GodogenDdmCliTests(unittest.TestCase):
     def test_check_env_reports_key_status_without_values(self):
@@ -163,7 +168,43 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertIn("verify: py_compile ok", proc.stdout)
             self.assertIn("verify: publish-runtime-matrix ok", proc.stdout)
             self.assertIn("verify: ok", proc.stdout)
-            self.assertTrue((Path(tmp) / "godot-codex" / "tools" / "godogen-ddm").exists())
+            runtime = Path(tmp) / "godot-codex"
+            self.assertTrue((runtime / "tools" / "godogen-ddm").exists())
+            self.assertTrue((runtime / "comfyui-cloud" / "profiles" / "tripo-image-to-3d.json").exists())
+            self.assertTrue((runtime / "comfyui-cloud" / "workflows" / "tripo-image-to-3d.workflow_api.json").exists())
+
+            ref = runtime / "refs" / "model_ref.png"
+            ref.parent.mkdir(parents=True)
+            ref.write_bytes(PNG_1X1)
+            model_output = runtime / "assets" / "models" / "dry.glb"
+            runtime_proc = subprocess.run(
+                [
+                    str(runtime / "tools" / "godogen-ddm"),
+                    "asset",
+                    "model3d",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "tripo-image-to-3d",
+                    "--dry-run",
+                    "--image",
+                    str(ref),
+                    "-o",
+                    str(model_output),
+                ],
+                cwd=runtime,
+                env={**os.environ, "COMFY_API_KEY": "comfy-secret-value"},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(runtime_proc.returncode, 0, runtime_proc.stderr)
+            runtime_result = json.loads(runtime_proc.stdout)
+            self.assertTrue(runtime_result["ok"])
+            self.assertEqual(runtime_result["provider"], "comfy-local")
+            self.assertEqual(runtime_result["profile"], "tripo-image-to-3d")
+            self.assertNotIn("comfy-secret-value", runtime_proc.stdout + runtime_proc.stderr)
 
     def test_external_smoke_defaults_to_non_paid_dry_run_without_leaking_keys(self):
         env = os.environ.copy()
@@ -188,6 +229,7 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertIn("codex-image: dry-run", proc.stdout)
             self.assertIn("codex-video: dry-run", proc.stdout)
             self.assertIn("comfy-local-llm: dry-run", proc.stdout)
+            self.assertIn("comfy-local-model3d: dry-run", proc.stdout)
             self.assertIn("tripo3d-glb: skipped", proc.stdout)
             self.assertIn("--yes-charge", proc.stdout)
             self.assertNotIn("sk-test-secret-value", proc.stdout)

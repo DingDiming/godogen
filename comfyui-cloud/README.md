@@ -16,10 +16,11 @@ Current runtime provider surface:
 - `image`: `dreamina`, `procedural`, `codex`, `comfy-cloud`, `comfy-local`
 - `texture`: defaults to `procedural`, can use image providers
 - `video`: `dreamina`, `codex`, `comfy-cloud`, `comfy-local`
+- `model3d`: `comfy-cloud`, `comfy-local`
 - `analyze`: `comfy-local`
-- `glb` / `rig` / `retarget` / `resume`: direct Tripo3D path
+- `glb` / `rig` / `retarget` / `resume`: direct Tripo3D fallback path
 
-The branch has already removed direct Grok, Gemini, and OpenAI API-key providers from runtime asset generation. The next architecture step is to replace one-off asset providers with a ComfyUI Cloud provider that can route through workflow profiles.
+The branch has already removed direct Grok, Gemini, and OpenAI API-key providers from runtime asset generation. `comfy-local` now submits versioned API-format workflows to the local ComfyUI server, including paid Partner/API nodes through `COMFY_API_KEY`.
 
 ## Target Provider Direction
 
@@ -30,7 +31,9 @@ asset_gen.py image   --provider comfy-cloud --workflow ref-image ...
 asset_gen.py image   --provider comfy-local --workflow ref-image ...
 asset_gen.py texture --provider comfy-cloud --workflow pbr-texture ...
 asset_gen.py video   --provider comfy-cloud --workflow image-to-video ...
+asset_gen.py video   --provider comfy-local --workflow image-to-video ...
 asset_gen.py model3d --provider comfy-cloud --workflow hunyuan-image-to-3d ...
+asset_gen.py model3d --provider comfy-local --workflow tripo-image-to-3d ...
 asset_gen.py analyze --provider comfy-local --workflow llm-smoke ...
 ```
 
@@ -65,7 +68,22 @@ Browser login in the local ComfyUI UI is enough for manual UI runs because the f
 
 ComfyUI Desktop is not required for this integration. The current source/local-server install is sufficient as long as it exposes the ComfyUI webserver API and the built-in Partner/API nodes. Desktop is a convenience package for installation, updates, and UI login, not the backend requirement.
 
-Direct `TRIPO3D_API_KEY` may remain temporarily as fallback while the ComfyUI Cloud 3D profiles are validated.
+Direct `TRIPO3D_API_KEY` remains as a fallback for the legacy `glb` / `rig` / `retarget` commands, but Comfy-backed 3D should use `asset_gen.py model3d --provider comfy-local --workflow tripo-image-to-3d` or `hunyuan-image-to-3d`.
+
+## Implemented Smoke Profiles
+
+- `ref-image`: `WanTextToImageApi -> SaveImage`, output `.png`.
+- `image-to-video`: `LoadImage -> WanImageToVideoApi -> SaveVideo`, output `.mp4`.
+- `tripo-image-to-3d`: `LoadImage -> TripoImageToModelNode -> SaveGLB`, output `.glb`.
+- `hunyuan-image-to-3d`: `LoadImage -> TencentImageToModelNode -> SaveGLB`, output `.glb`.
+- `llm-smoke`: `OpenRouterLLMNode -> PreviewAny`, output `.txt`.
+
+Verified on 2026-06-22 against local ComfyUI `0.25.1` on `http://127.0.0.1:8000` with Comfy account credits:
+
+- Image: `WanTextToImageApi`, `1024x1024` PNG.
+- Video: `WanImageToVideoApi`, `5.04s` H.264 MP4.
+- Tripo3D: `TripoImageToModelNode`, valid GLB.
+- Hunyuan3D: `TencentImageToModelNode`, valid GLB.
 
 ## Non-Goals
 

@@ -726,12 +726,20 @@ Expected:
 - Smoke passes.
 - Non-paid external-smoke includes Comfy Cloud dry-run and does not consume credits.
 
-## Open Decisions Before Coding Real Cloud Submission
+## Decisions Closed During Local Partner Node Smoke
 
-- Which first real workflow profile should be exported from Comfy Cloud UI: `ref-image`, `hunyuan-image-to-3d`, or `llm-vision-review`.
-- Whether `model3d` should be a new asset subcommand immediately or whether it should initially reuse existing `glb` only after Comfy profile validation.
-- Whether direct Tripo3D remains a long-term fallback or is retired after Comfy Tripo/Hunyuan workflows pass real smoke.
+- First implemented real local Partner Node smoke profiles: `ref-image`, `image-to-video`, `tripo-image-to-3d`, `hunyuan-image-to-3d`, and `llm-smoke`.
+- `model3d` is now a new asset subcommand for Comfy-backed 3D generation.
+- Direct Tripo3D remains a fallback for `glb` / `rig` / `retarget` until the Comfy path has more production coverage.
 - Where Comfy Cloud workflow JSON should be stored in published game repos if workflows become large.
+
+## Real Smoke Evidence 2026-06-22
+
+- `ref-image`: local ComfyUI `WanTextToImageApi` completed and downloaded a `1024x1024` PNG.
+- `image-to-video`: local ComfyUI `WanImageToVideoApi` completed and downloaded a `5.04s` H.264 MP4.
+- `tripo-image-to-3d`: local ComfyUI `TripoImageToModelNode` completed and downloaded a valid GLB.
+- `hunyuan-image-to-3d`: local ComfyUI `TencentImageToModelNode` completed and downloaded a valid GLB.
+- All four ran through `COMFY_API_KEY` in `extra_data.api_key_comfy_org` against local ComfyUI server `http://127.0.0.1:8000`.
 
 ## Spec Coverage Check
 

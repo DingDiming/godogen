@@ -1,0 +1,44 @@
+{
+  "id": "image-to-video",
+  "asset_kind": "video",
+  "workflow": "workflows/image-to-video.workflow_api.json",
+  "inputs": {
+    "image": {
+      "node": "1",
+      "field": "inputs.image",
+      "upload": true
+    },
+    "prompt": {
+      "node": "2",
+      "field": "inputs.prompt"
+    },
+    "duration": {
+      "node": "2",
+      "field": "inputs.duration",
+      "default": 5
+    },
+    "resolution": {
+      "node": "2",
+      "field": "inputs.resolution",
+      "default": "480P",
+      "map": {
+        "480p": "480P",
+        "720p": "720P"
+      }
+    },
+    "seed": {
+      "node": "2",
+      "field": "inputs.seed",
+      "default": 0
+    }
+  },
+  "outputs": [
+    {
+      "node": "3",
+      "kind": "video",
+      "extensions": [".mp4"]
+    }
+  ],
+  "timeout_seconds": 900,
+  "paid": true
+}
