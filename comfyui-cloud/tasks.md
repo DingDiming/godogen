@@ -1,14 +1,36 @@
-# ComfyUI Cloud Implementation Plan
+# ComfyUI Cloud / Local Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a ComfyUI Cloud provider path so Godogen can use Comfy Cloud as the unified cloud model router for image, texture, video, 3D, and workflow-local LLM tasks.
+**Goal:** Add Comfy provider paths so Godogen can use local ComfyUI plus Comfy account credits/Partner Nodes, and optionally hosted Comfy Cloud API, as the unified model router for image, texture, video, 3D, and workflow-local LLM tasks.
 
-**Architecture:** Codex remains the orchestrator and acceptance owner. ComfyUI Cloud becomes the cloud model execution layer through versioned workflow profiles, async job monitoring, output download, and sidecar tracking.
+**Architecture:** Codex remains the orchestrator and acceptance owner. ComfyUI becomes the model execution layer through versioned workflow profiles, async job monitoring, output download/text write, and sidecar tracking.
 
-**Tech Stack:** Python 3 standard library, existing `asset_gen.py` provider pattern, Comfy Cloud API, exported Comfy API-format workflow JSON, unittest, Bash wrapper checks.
+**Tech Stack:** Python 3 standard library, existing `asset_gen.py` provider pattern, local ComfyUI `/prompt` API, optional Comfy Cloud API, exported Comfy API-format workflow JSON, unittest, Bash wrapper checks.
 
 ---
+
+## Task 5: Local ComfyUI Partner Node Provider
+
+**Status:** implemented in this phase.
+
+**Files:**
+- Create: `shared/skills/godogen/tools/providers/comfy_local.py`
+- Modify: `shared/skills/godogen/tools/providers/comfy_outputs.py`
+- Modify: `shared/skills/godogen/tools/asset_gen.py`
+- Modify: `bin/godogen-ddm`
+- Create: `comfyui-cloud/profiles/llm-smoke.json`
+- Create: `comfyui-cloud/workflows/llm-smoke.workflow_api.json`
+- Test: `tests/test_asset_gen_providers.py`
+- Test: `tests/test_godogen_ddm_cli.py`
+
+- [x] Add `comfy-local` provider for local ComfyUI `POST /prompt`, `GET /history/{prompt_id}`, and `GET /view`.
+- [x] Add `asset_gen.py analyze --provider comfy-local --workflow llm-smoke`.
+- [x] Add a low-cost OpenRouter `llm-smoke` workflow profile for credit/auth smoke testing.
+- [x] Require `COMFY_API_KEY` for paid Partner/API node CLI submission; do not assume browser login can be reused by Codex.
+- [x] Preserve no-secret sidecars; never write Comfy API keys, account email, signed URLs, or credit balances.
+- [x] Extend non-paid `external-smoke` with `comfy-local` dry-run only.
+- [x] Verify current local state: logged-in UI visible, Partner/API nodes loaded, direct CLI submission without `COMFY_API_KEY` refuses before paid work.
 
 ## File Structure
 

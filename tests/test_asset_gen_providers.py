@@ -169,6 +169,152 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(data["outputs"][0]["path"], str(output))
             self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
 
+    def test_comfy_local_analyze_dry_run_builds_local_prompt_request(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-dry.") as tmp:
+            output = Path(tmp) / "refs" / "llm_smoke.txt"
+            proc = run_asset_gen(
+                [
+                    "analyze",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "llm-smoke",
+                    "--dry-run",
+                    "--prompt",
+                    "Reply with exactly: ok",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_API_KEY": "comfy-secret-value",
+                    "COMFY_SERVER_URL": "http://127.0.0.1:8000",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["provider"], "comfy-local")
+            self.assertEqual(result["path"], str(output))
+            self.assertEqual(result["profile"], "llm-smoke")
+            self.assertEqual(result["request"]["method"], "POST")
+            self.assertEqual(result["request"]["url"], "http://127.0.0.1:8000/prompt")
+            self.assertEqual(result["request"]["json"]["prompt"]["1"]["class_type"], "OpenRouterLLMNode")
+            self.assertEqual(result["request"]["json"]["prompt"]["1"]["inputs"]["model"], "deepseek/deepseek-v4-flash")
+            self.assertEqual(result["request"]["json"]["extra_data"]["api_key_comfy_org"], "<set>")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr)
+
+    def test_comfy_local_paid_profile_requires_api_key_for_submission(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-auth.") as tmp:
+            output = Path(tmp) / "refs" / "llm_smoke.txt"
+            proc = run_asset_gen(
+                [
+                    "analyze",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "llm-smoke",
+                    "--prompt",
+                    "Reply with exactly: ok",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_API_KEY": "",
+                    "COMFY_CLOUD_API_KEY": "",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["provider"], "comfy-local")
+            self.assertIn("COMFY_API_KEY", result["error"])
+            self.assertFalse(output.exists())
+
+    def test_comfy_local_submission_records_pending_sidecar_without_leaking_key(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-pending.") as tmp:
+            output = Path(tmp) / "refs" / "llm_smoke.txt"
+            proc = run_asset_gen(
+                [
+                    "analyze",
+                    "--provider",
+                    "comfy-local",
+                    "--workflow",
+                    "llm-smoke",
+                    "--prompt",
+                    "Reply with exactly: ok",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_API_KEY": "comfy-secret-value",
+                    "GODOGEN_COMFY_FAKE_PROMPT_ID": "local-prompt-123",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 1)
+            result = parse_json_stdout(proc)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "comfy-local")
+            self.assertEqual(result["prompt_id"], "local-prompt-123")
+            sidecar = Path(result["sidecar"])
+            self.assertTrue(sidecar.exists())
+            data = json.loads(sidecar.read_text())
+            self.assertEqual(data["provider"], "comfy-local")
+            self.assertEqual(data["status"], "pending")
+            self.assertEqual(data["prompt_id"], "local-prompt-123")
+            self.assertEqual(data["endpoint"], "http://127.0.0.1:8000")
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
+
+    def test_comfy_local_resume_writes_completed_text_output(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-local-complete.") as tmp:
+            output = Path(tmp) / "refs" / "llm_smoke.txt"
+            sidecar = output.with_suffix(output.suffix + ".comfy.json")
+            sidecar.parent.mkdir(parents=True)
+            sidecar.write_text(
+                json.dumps(
+                    {
+                        "provider": "comfy-local",
+                        "profile": "llm-smoke",
+                        "task_type": "analyze",
+                        "status": "pending",
+                        "prompt_id": "local-prompt-123",
+                        "target_path": str(output),
+                        "endpoint": "http://127.0.0.1:8000",
+                        "outputs": [],
+                        "error": None,
+                    }
+                )
+                + "\n"
+            )
+
+            proc = run_asset_gen(
+                [
+                    "comfy_resume",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_API_KEY": "comfy-secret-value",
+                    "GODOGEN_COMFY_FAKE_STATUS": "completed",
+                    "GODOGEN_COMFY_FAKE_HISTORY_TEXT": "ok",
+                },
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "comfy-local")
+            self.assertEqual(result["path"], str(output))
+            self.assertEqual(output.read_text(), "ok\n")
+            data = json.loads(sidecar.read_text())
+            self.assertEqual(data["status"], "complete")
+            self.assertEqual(data["outputs"][0]["path"], str(output))
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
+
     def test_procedural_env_provider_generates_png_without_external_sdks(self):
         with tempfile.TemporaryDirectory(prefix="godogen-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "checker.png"

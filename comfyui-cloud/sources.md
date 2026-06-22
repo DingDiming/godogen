@@ -1,4 +1,4 @@
-# ComfyUI Cloud Source Notes
+# ComfyUI Cloud / Local Source Notes
 
 This file captures the current public documentation facts that drive the integration plan. Re-check these before implementing because Comfy Cloud API documentation marks the API as experimental.
 
@@ -35,6 +35,25 @@ Key facts:
 - They are opt-in and can be combined with ordinary Comfy nodes.
 - Partner Nodes are the right abstraction for using closed-source/cloud models from Godogen through Comfy.
 
+## Local ComfyUI Server And API Nodes
+
+Sources:
+
+- Local install inspected from `/Users/ddm/Documents/ComfyUI` at ComfyUI `v0.25.1`
+- Source example: `/Users/ddm/Documents/ComfyUI/script_examples/basic_api_example.py`
+- Source implementation: `/Users/ddm/Documents/ComfyUI/comfy_api/latest/_io.py`
+- Source implementation: `/Users/ddm/Documents/ComfyUI/comfy_api_nodes/nodes_openrouter.py`
+
+Key facts:
+
+- Local ComfyUI source install serves workflow API calls through `POST /prompt`, history through `GET /history/{prompt_id}`, and file download through `GET /view`.
+- API-format workflows are still required; UI graph JSON is not the submission format.
+- API nodes expose hidden `AUTH_TOKEN_COMFY_ORG` and `API_KEY_COMFY_ORG` fields.
+- Browser login supplies an auth token for UI-run workflows, but direct CLI/API submission does not automatically reuse that browser login.
+- Programmatic Partner/API node submission should pass a Comfy account API key through `extra_data.api_key_comfy_org`; Godogen reads this from `COMFY_API_KEY` and never stores it in sidecars.
+- `OpenRouterLLMNode` uses `COMFY_DYNAMICCOMBO_V3`; API workflow input should set `inputs.model` to the selected model string and nested option fields as dotted keys such as `inputs.model.reasoning_effort`.
+- A direct `/prompt` probe without `COMFY_API_KEY` against a paid Partner node returned `Unauthorized: Please login first to use this node.`, confirming that UI login is not sufficient for Codex CLI automation.
+
 ## LLM Nodes
 
 OpenRouter LLM source: https://docs.comfy.org/tutorials/partner-nodes/openrouter/llm
@@ -64,6 +83,7 @@ Architecture implication:
 
 - LLMs can exist inside Comfy workflows for prompt expansion, image analysis, metadata generation, and workflow-internal decisions.
 - Codex should remain the project orchestrator because it owns repo edits, tests, engine runs, git, and acceptance.
+- `llm-smoke` is the lowest-cost practical paid-path smoke because it uses short text through OpenRouter rather than image/video/3D generation.
 
 ## Image, Video, And 3D Nodes
 

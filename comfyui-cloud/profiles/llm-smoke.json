@@ -1,0 +1,40 @@
+{
+  "id": "llm-smoke",
+  "asset_kind": "analyze",
+  "workflow": "workflows/llm-smoke.workflow_api.json",
+  "inputs": {
+    "prompt": {
+      "node": "1",
+      "field": "inputs.prompt"
+    },
+    "model": {
+      "node": "1",
+      "field": "inputs.model",
+      "default": "deepseek/deepseek-v4-flash"
+    },
+    "reasoning_effort": {
+      "node": "1",
+      "field": "inputs.model.reasoning_effort",
+      "default": "off"
+    },
+    "system_prompt": {
+      "node": "1",
+      "field": "inputs.system_prompt",
+      "default": "You are a terse ComfyUI Partner Node smoke test."
+    },
+    "seed": {
+      "node": "1",
+      "field": "inputs.seed",
+      "default": 0
+    }
+  },
+  "outputs": [
+    {
+      "node": "2",
+      "kind": "text",
+      "extensions": [".txt", ".json"]
+    }
+  ],
+  "timeout_seconds": 120,
+  "paid": true
+}

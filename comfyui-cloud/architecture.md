@@ -8,27 +8,32 @@ The target product boundary is:
 Codex
   owns repo, code, tests, engine runs, capture, git, acceptance
 
-ComfyUI Cloud
-  owns cloud model execution for image, video, 3D, texture, and workflow-local LLM nodes
+ComfyUI / Comfy Account
+  owns workflow execution for image, video, 3D, texture, and workflow-local LLM nodes
+  uses local ComfyUI server plus Comfy credits for paid Partner/API nodes
 ```
 
 Codex should not become a thin wrapper around Comfy. Comfy should not become the project manager. The split is:
 
 - Codex decides what asset is needed.
 - Codex chooses a workflow profile.
-- Codex submits the workflow to Comfy Cloud.
-- Comfy runs the selected cloud models and returns files or structured text.
+- Codex submits the workflow to local ComfyUI or Comfy Cloud.
+- Comfy runs the selected models and returns files or structured text.
 - Codex copies files into the game repo and verifies them in-engine.
 
 ## Provider Layer
 
-Add `comfy-cloud` as a provider under the existing asset generator system.
+Use two explicit Comfy providers under the existing asset generator system:
+
+- `comfy-local`: submits workflow API JSON to a local ComfyUI server, defaulting to `http://127.0.0.1:8000`; paid Partner/API nodes require `COMFY_API_KEY`.
+- `comfy-cloud`: submits to hosted Comfy Cloud API; it remains useful when the hosted API tier is intentionally used.
 
 Candidate source files:
 
 - `shared/skills/godogen/tools/providers/comfy_cloud.py`
 - `shared/skills/godogen/tools/providers/comfy_profiles.py`
 - `shared/skills/godogen/tools/providers/comfy_http.py`
+- `shared/skills/godogen/tools/providers/comfy_local.py`
 - `shared/skills/godogen/tools/providers/comfy_outputs.py`
 
 Keep responsibilities split:
@@ -37,6 +42,7 @@ Keep responsibilities split:
 - `comfy_http.py`: submit workflow, poll job, fetch job detail, download output.
 - `comfy_outputs.py`: map Comfy output metadata to requested output paths.
 - `comfy_cloud.py`: provider entrypoint called by `asset_gen.py`.
+- `comfy_local.py`: local ComfyUI provider entrypoint for local `/prompt`, `/history`, and `/view`.
 
 ## Workflow Profiles
 
@@ -91,7 +97,7 @@ Keep the existing compatibility shape and add the smallest new command surface:
 
 ```bash
 asset_gen.py image \
-  --provider comfy-cloud \
+  --provider comfy-local \
   --workflow ref-image \
   --prompt "..." \
   -o assets/img/ref.png
@@ -111,14 +117,13 @@ asset_gen.py model3d \
   -o assets/glb/model.glb
 
 asset_gen.py analyze \
-  --provider comfy-cloud \
-  --workflow llm-vision-review \
-  --image screenshots/result/1/frame.png \
-  --prompt "Compare this frame to the visual target." \
-  -o refs/review/frame_review.json
+  --provider comfy-local \
+  --workflow llm-smoke \
+  --prompt "Reply with exactly: ok" \
+  -o refs/review/llm_smoke.txt
 ```
 
-If adding `model3d` and `analyze` is too broad for the first coding slice, start with `image --provider comfy-cloud --dry-run` and `texture --provider comfy-cloud --dry-run`, then add other kinds.
+If adding `model3d` is too broad for the first coding slice, start with `analyze --provider comfy-local --dry-run`, `image --provider comfy-cloud --dry-run`, and `texture --provider comfy-cloud --dry-run`, then add other kinds.
 
 ## Sidecar Contract
 
@@ -126,7 +131,7 @@ Every Comfy submission writes a sidecar next to the target output:
 
 ```json
 {
-  "provider": "comfy-cloud",
+  "provider": "comfy-local",
   "profile": "ref-image",
   "status": "pending",
   "prompt_id": "cloud-job-id",
@@ -141,6 +146,7 @@ Every Comfy submission writes a sidecar next to the target output:
 Never store:
 
 - `COMFY_CLOUD_API_KEY`
+- `COMFY_API_KEY`
 - signed output URLs
 - account email
 - credit balance
@@ -148,7 +154,7 @@ Never store:
 
 ## Completion Semantics
 
-Comfy Cloud states map into Godogen JSON as:
+Comfy states map into Godogen JSON as:
 
 - `pending` / `in_progress`: `{"ok": false, "pending": true, ...}`
 - `completed` with downloaded file: `{"ok": true, "path": "...", "cost_cents": 0}`

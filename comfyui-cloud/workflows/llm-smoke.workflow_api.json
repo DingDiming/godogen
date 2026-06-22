@@ -1,0 +1,18 @@
+{
+  "1": {
+    "class_type": "OpenRouterLLMNode",
+    "inputs": {
+      "prompt": "Reply with exactly: ok",
+      "model": "deepseek/deepseek-v4-flash",
+      "model.reasoning_effort": "off",
+      "seed": 0,
+      "system_prompt": "You are a terse ComfyUI Partner Node smoke test."
+    }
+  },
+  "2": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": ["1", 0]
+    }
+  }
+}

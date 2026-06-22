@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from providers import codex_task, comfy_cloud, dreamina_cli, procedural
+from providers import codex_task, comfy_cloud, comfy_local, dreamina_cli, procedural
 from providers.common import ProviderResult
 
 TOOLS_DIR = Path(__file__).parent
@@ -112,8 +112,9 @@ def emit_provider_result(result: ProviderResult) -> None:
 
 # --- Image/video provider routing ---
 
-IMAGE_PROVIDERS = ["dreamina", "procedural", "codex", "comfy-cloud"]
-VIDEO_PROVIDERS = ["dreamina", "codex", "comfy-cloud"]
+IMAGE_PROVIDERS = ["dreamina", "procedural", "codex", "comfy-cloud", "comfy-local"]
+VIDEO_PROVIDERS = ["dreamina", "codex", "comfy-cloud", "comfy-local"]
+ANALYZE_PROVIDERS = ["comfy-local"]
 ALL_SIZES = ["512", "1K", "2K", "4K"]
 ALL_ASPECT_RATIOS = [
     "1:1",
@@ -173,6 +174,10 @@ def _run_image_provider(args, output: Path, provider: str, kind: str = "image") 
             check_budget(0)
             _emit_or_exit(comfy_cloud.generate_image(args, output, kind))
 
+        elif provider == "comfy-local":
+            check_budget(0)
+            _emit_or_exit(comfy_local.generate_image(args, output, kind))
+
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
         sys.exit(1)
@@ -214,6 +219,26 @@ def cmd_video(args):
             check_budget(0)
             _emit_or_exit(comfy_cloud.generate_video(args, output))
 
+        elif provider == "comfy-local":
+            check_budget(0)
+            _emit_or_exit(comfy_local.generate_video(args, output))
+
+    except Exception as e:
+        result_json(False, error=str(e), provider=provider)
+        sys.exit(1)
+
+
+def cmd_analyze(args):
+    provider = _selected_provider(args.provider, "GODOGEN_ANALYZE_PROVIDER", "comfy-local")
+    if provider not in ANALYZE_PROVIDERS:
+        _fail_provider_error(f"Unknown analyze provider: {provider}. Use: {', '.join(ANALYZE_PROVIDERS)}")
+
+    output = Path(args.output)
+    print(f"Running analysis ({provider})...", file=sys.stderr)
+    try:
+        if provider == "comfy-local":
+            check_budget(0)
+            _emit_or_exit(comfy_local.generate_analyze(args, output))
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
         sys.exit(1)
@@ -511,9 +536,17 @@ def cmd_resume(args):
 
 def cmd_comfy_resume(args):
     try:
-        _emit_or_exit(comfy_cloud.resume_output(Path(args.output)))
+        output = Path(args.output)
+        sidecar = output.with_suffix(output.suffix + ".comfy.json")
+        provider = "comfy-cloud"
+        if sidecar.exists():
+            provider = json.loads(sidecar.read_text()).get("provider", provider)
+        if provider == "comfy-local":
+            _emit_or_exit(comfy_local.resume_output(output))
+        else:
+            _emit_or_exit(comfy_cloud.resume_output(output))
     except Exception as e:
-        result_json(False, error=str(e), provider="comfy-cloud")
+        result_json(False, error=str(e), provider="comfy")
         sys.exit(1)
 
 
@@ -542,7 +575,7 @@ def main():
                        help="Aspect ratio. Default: 1:1")
     p_img.add_argument("--image", default=None, help="Reference image for image-to-image edit")
     p_img.add_argument("--workflow", default=None,
-                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
+                       help="Comfy workflow profile id when --provider comfy-cloud or comfy-local.")
     p_img.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="checker",
                        help="Procedural image kind when --provider procedural. Default: checker.")
     p_img.add_argument("--poll", type=int, default=0,
@@ -562,7 +595,7 @@ def main():
                        help="Aspect ratio. Default: 1:1")
     p_tex.add_argument("--image", default=None, help="Reference image for provider image-to-image edit")
     p_tex.add_argument("--workflow", default=None,
-                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
+                       help="Comfy workflow profile id when --provider comfy-cloud or comfy-local.")
     p_tex.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="tile",
                        help="Procedural texture kind when --provider procedural. Default: tile.")
     p_tex.add_argument("--poll", type=int, default=0,
@@ -581,13 +614,33 @@ def main():
     p_vid.add_argument("--resolution", choices=["480p", "720p"], default="720p",
                        help="Video resolution. Default: 720p")
     p_vid.add_argument("--workflow", default=None,
-                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
+                       help="Comfy workflow profile id when --provider comfy-cloud or comfy-local.")
     p_vid.add_argument("--poll", type=int, default=0,
                        help="Dreamina: poll up to N seconds after submit. Default: 0")
     p_vid.add_argument("--dry-run", action="store_true",
                        help="Build provider command without submitting a paid generation task.")
     p_vid.add_argument("-o", "--output", required=True, help="Output MP4 path")
     p_vid.set_defaults(func=cmd_video)
+
+    p_an = sub.add_parser("analyze", help="Run a workflow-local LLM or inspection workflow")
+    p_an.add_argument("--provider", choices=ANALYZE_PROVIDERS, default=None,
+                      help="Provider override. Env fallback: GODOGEN_ANALYZE_PROVIDER. Default: comfy-local.")
+    p_an.add_argument("--workflow", default="llm-smoke",
+                      help="Comfy workflow profile id. Default: llm-smoke.")
+    p_an.add_argument("--prompt", required=True, help="Analysis prompt")
+    p_an.add_argument("--model", default=None,
+                      help="Workflow model override, for example deepseek/deepseek-v4-flash.")
+    p_an.add_argument("--reasoning-effort", dest="reasoning_effort",
+                      choices=["off", "low", "medium", "high"], default=None,
+                      help="Reasoning effort for workflows that expose it. Default: profile value.")
+    p_an.add_argument("--system-prompt", dest="system_prompt", default=None,
+                      help="Optional system prompt for workflows that expose it.")
+    p_an.add_argument("--seed", type=int, default=None,
+                      help="Seed for workflows that expose it. Default: profile value.")
+    p_an.add_argument("--dry-run", action="store_true",
+                      help="Build provider request without submitting a paid workflow task.")
+    p_an.add_argument("-o", "--output", required=True, help="Output text/JSON path")
+    p_an.set_defaults(func=cmd_analyze)
 
     p_glb = sub.add_parser("glb", help="Convert PNG to static GLB (30¢ default, 60¢ hd)")
     p_glb.add_argument("--image", required=True, help="Input PNG path")

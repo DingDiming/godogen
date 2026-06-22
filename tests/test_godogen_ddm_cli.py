@@ -17,6 +17,8 @@ class GodogenDdmCliTests(unittest.TestCase):
         env["OPENAI_API_KEY"] = "sk-test-secret-value"
         env["GOOGLE_API_KEY"] = "google-secret-value"
         env["XAI_API_KEY"] = "xai-secret-value"
+        env["COMFY_API_KEY"] = "comfy-secret-value"
+        env["COMFY_CLOUD_API_KEY"] = "comfy-cloud-secret-value"
         env["GODOGEN_IMAGE_PROVIDER"] = "procedural"
 
         proc = subprocess.run(
@@ -35,12 +37,16 @@ class GodogenDdmCliTests(unittest.TestCase):
         self.assertIn("ffmpeg:", proc.stdout)
         self.assertIn("dreamina:", proc.stdout)
         self.assertIn("GODOGEN_IMAGE_PROVIDER=set", proc.stdout)
+        self.assertIn("COMFY_API_KEY=set", proc.stdout)
+        self.assertIn("COMFY_CLOUD_API_KEY=set", proc.stdout)
         self.assertNotIn("OPENAI_API_KEY", proc.stdout)
         self.assertNotIn("GOOGLE_API_KEY", proc.stdout)
         self.assertNotIn("XAI_API_KEY", proc.stdout)
         self.assertNotIn("sk-test-secret-value", proc.stdout)
         self.assertNotIn("google-secret-value", proc.stdout)
         self.assertNotIn("xai-secret-value", proc.stdout)
+        self.assertNotIn("comfy-secret-value", proc.stdout)
+        self.assertNotIn("comfy-cloud-secret-value", proc.stdout)
 
     def test_publish_godot_codex_generates_runtime_layout(self):
         with tempfile.TemporaryDirectory(prefix="godogen-ddm-publish.") as tmp:
@@ -181,6 +187,7 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertIn("dreamina-video: dry-run", proc.stdout)
             self.assertIn("codex-image: dry-run", proc.stdout)
             self.assertIn("codex-video: dry-run", proc.stdout)
+            self.assertIn("comfy-local-llm: dry-run", proc.stdout)
             self.assertIn("tripo3d-glb: skipped", proc.stdout)
             self.assertIn("--yes-charge", proc.stdout)
             self.assertNotIn("sk-test-secret-value", proc.stdout)

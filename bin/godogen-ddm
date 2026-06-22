@@ -53,7 +53,7 @@ usage() {
 Usage:
   godogen-ddm check-env
   godogen-ddm publish --engine godot|bevy|babylon --agent claude|codex --out <dir> [--force] [--video_hook]
-  godogen-ddm asset image|texture|video|glb|rig|retarget|resume|set_budget ...
+  godogen-ddm asset image|texture|video|analyze|glb|rig|retarget|resume|comfy_resume|set_budget ...
   godogen-ddm smoke
   godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
   godogen-ddm verify [--out <dir>] [--skip-tests] [--skip-smoke] [--skip-external-smoke]
@@ -143,7 +143,11 @@ cmd_check_env() {
 
     env_status GODOGEN_IMAGE_PROVIDER
     env_status GODOGEN_VIDEO_PROVIDER
+    env_status GODOGEN_ANALYZE_PROVIDER
     env_status GODOGEN_DREAMINA_BIN
+    env_status COMFY_SERVER_URL
+    env_status COMFY_API_KEY
+    env_status COMFY_CLOUD_API_KEY
     env_status TRIPO3D_API_KEY
 }
 
@@ -162,7 +166,7 @@ cmd_asset() {
     fi
 
     case "$1" in
-        image|texture|video|glb|rig|retarget|resume|set_budget)
+        image|texture|video|analyze|glb|rig|retarget|resume|comfy_resume|set_budget)
             if [ -z "$ASSET_GEN" ]; then
                 echo "error: could not locate godogen asset_gen.py from $ROOT" >&2
                 exit 1
@@ -516,7 +520,8 @@ Usage:
   godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
 
 Default mode is non-paid: it creates a procedural first frame and validates
-Dreamina command construction and Codex task construction with dry-runs.
+Dreamina command construction, Codex task construction, and Comfy local LLM
+request construction with dry-runs.
 Tripo3D has no dry-run provider path, so it is skipped unless --yes-charge is
 supplied.
 
@@ -543,6 +548,7 @@ EOF
     dreamina_video="$out/assets/video/dreamina_external_smoke.mp4"
     codex_video="$out/assets/video/codex_external_smoke.mp4"
     codex_image="$out/assets/img/codex_external_smoke.png"
+    comfy_text="$out/assets/img/comfy_local_llm_smoke.txt"
     tripo_glb="$out/assets/glb/tripo_external_smoke.glb"
 
     "$SELF" asset texture \
@@ -571,11 +577,17 @@ EOF
             --duration 4 --resolution 720p --poll "$poll" \
             -o "$codex_video" >/dev/null
 
+        "$SELF" asset analyze \
+            --provider comfy-local --workflow llm-smoke --dry-run \
+            --prompt "Reply with exactly: ok" \
+            -o "$comfy_text" >/dev/null
+
         printf 'external-smoke: dry-run (%s)\n' "$out"
         printf 'procedural-first-frame: ok %s\n' "$first_frame"
         printf 'dreamina-video: dry-run %s\n' "$dreamina_video"
         printf 'codex-image: dry-run %s\n' "$codex_image"
         printf 'codex-video: dry-run %s\n' "$codex_video"
+        printf 'comfy-local-llm: dry-run %s\n' "$comfy_text"
         printf 'tripo3d-glb: skipped (no non-paid dry-run path)\n'
         printf 'Use --yes-charge to submit real Dreamina/Tripo3D provider tasks.\n'
         return 0
