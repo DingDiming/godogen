@@ -60,6 +60,35 @@ class AssetGenProviderTests(unittest.TestCase):
         self.assertEqual(profile["inputs"]["prompt"]["node"], "6")
         self.assertEqual(profile["outputs"][0]["kind"], "image")
 
+    def test_comfy_image_dry_run_builds_cloud_prompt_request(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-dry.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "ref.png"
+            proc = run_asset_gen(
+                [
+                    "image",
+                    "--provider",
+                    "comfy-cloud",
+                    "--workflow",
+                    "ref-image",
+                    "--dry-run",
+                    "--prompt",
+                    "top down racing car reference",
+                    "-o",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "comfy-cloud")
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["path"], str(output))
+            self.assertEqual(result["profile"], "ref-image")
+            self.assertEqual(result["request"]["method"], "POST")
+            self.assertEqual(result["request"]["url"], "https://cloud.comfy.org/api/prompt")
+            self.assertIn("prompt", result["request"]["json"])
+
     def test_procedural_env_provider_generates_png_without_external_sdks(self):
         with tempfile.TemporaryDirectory(prefix="godogen-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "checker.png"

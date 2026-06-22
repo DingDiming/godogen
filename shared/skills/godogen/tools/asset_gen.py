@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from providers import codex_task, dreamina_cli, procedural
+from providers import codex_task, comfy_cloud, dreamina_cli, procedural
 from providers.common import ProviderResult
 
 TOOLS_DIR = Path(__file__).parent
@@ -112,8 +112,8 @@ def emit_provider_result(result: ProviderResult) -> None:
 
 # --- Image/video provider routing ---
 
-IMAGE_PROVIDERS = ["dreamina", "procedural", "codex"]
-VIDEO_PROVIDERS = ["dreamina", "codex"]
+IMAGE_PROVIDERS = ["dreamina", "procedural", "codex", "comfy-cloud"]
+VIDEO_PROVIDERS = ["dreamina", "codex", "comfy-cloud"]
 ALL_SIZES = ["512", "1K", "2K", "4K"]
 ALL_ASPECT_RATIOS = [
     "1:1",
@@ -169,6 +169,10 @@ def _run_image_provider(args, output: Path, provider: str, kind: str = "image") 
             check_budget(codex_task.CODEX_TASK_COST_CENTS)
             _emit_or_exit(codex_task.generate_image(args, output, kind))
 
+        elif provider == "comfy-cloud":
+            check_budget(0)
+            _emit_or_exit(comfy_cloud.generate_image(args, output, kind))
+
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
         sys.exit(1)
@@ -205,6 +209,10 @@ def cmd_video(args):
         elif provider == "codex":
             check_budget(codex_task.CODEX_TASK_COST_CENTS)
             _emit_or_exit(codex_task.generate_video(args, output))
+
+        elif provider == "comfy-cloud":
+            check_budget(0)
+            _emit_or_exit(comfy_cloud.generate_video(args, output))
 
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
@@ -525,6 +533,8 @@ def main():
     p_img.add_argument("--aspect-ratio", choices=ALL_ASPECT_RATIOS, default="1:1",
                        help="Aspect ratio. Default: 1:1")
     p_img.add_argument("--image", default=None, help="Reference image for image-to-image edit")
+    p_img.add_argument("--workflow", default=None,
+                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
     p_img.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="checker",
                        help="Procedural image kind when --provider procedural. Default: checker.")
     p_img.add_argument("--poll", type=int, default=0,
@@ -543,6 +553,8 @@ def main():
     p_tex.add_argument("--aspect-ratio", choices=ALL_ASPECT_RATIOS, default="1:1",
                        help="Aspect ratio. Default: 1:1")
     p_tex.add_argument("--image", default=None, help="Reference image for provider image-to-image edit")
+    p_tex.add_argument("--workflow", default=None,
+                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
     p_tex.add_argument("--procedural-kind", choices=procedural.PROCEDURAL_KINDS, default="tile",
                        help="Procedural texture kind when --provider procedural. Default: tile.")
     p_tex.add_argument("--poll", type=int, default=0,
@@ -560,6 +572,8 @@ def main():
     p_vid.add_argument("--duration", type=int, required=True, help="Duration in seconds (1-15)")
     p_vid.add_argument("--resolution", choices=["480p", "720p"], default="720p",
                        help="Video resolution. Default: 720p")
+    p_vid.add_argument("--workflow", default=None,
+                       help="Comfy Cloud workflow profile id when --provider comfy-cloud.")
     p_vid.add_argument("--poll", type=int, default=0,
                        help="Dreamina: poll up to N seconds after submit. Default: 0")
     p_vid.add_argument("--dry-run", action="store_true",
