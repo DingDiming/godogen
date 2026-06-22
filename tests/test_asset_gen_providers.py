@@ -123,6 +123,52 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(data["prompt_id"], "prompt-123")
             self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
 
+    def test_comfy_resume_downloads_completed_output(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-comfy-complete.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "ref.png"
+            sidecar = output.with_suffix(output.suffix + ".comfy.json")
+            sidecar.parent.mkdir(parents=True)
+            sidecar.write_text(
+                json.dumps(
+                    {
+                        "provider": "comfy-cloud",
+                        "profile": "ref-image",
+                        "task_type": "image",
+                        "status": "pending",
+                        "prompt_id": "prompt-123",
+                        "target_path": str(output),
+                        "outputs": [],
+                        "error": None,
+                    }
+                )
+                + "\n"
+            )
+
+            proc = run_asset_gen(
+                [
+                    "comfy_resume",
+                    "-o",
+                    str(output),
+                ],
+                env={
+                    "COMFY_CLOUD_API_KEY": "comfy-secret-value",
+                    "GODOGEN_COMFY_FAKE_STATUS": "completed",
+                    "GODOGEN_COMFY_FAKE_OUTPUT_BYTES_HEX": PNG_1X1.hex(),
+                },
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = parse_json_stdout(proc)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["provider"], "comfy-cloud")
+            self.assertEqual(result["path"], str(output))
+            self.assertEqual(result["cost_cents"], 0)
+            self.assertEqual(output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+            data = json.loads(sidecar.read_text())
+            self.assertEqual(data["status"], "complete")
+            self.assertEqual(data["outputs"][0]["path"], str(output))
+            self.assertNotIn("comfy-secret-value", proc.stdout + proc.stderr + sidecar.read_text())
+
     def test_procedural_env_provider_generates_png_without_external_sdks(self):
         with tempfile.TemporaryDirectory(prefix="godogen-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "checker.png"

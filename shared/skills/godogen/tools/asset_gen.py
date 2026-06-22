@@ -509,6 +509,14 @@ def cmd_resume(args):
     result_json(True, path=str(output), cost_cents=0)
 
 
+def cmd_comfy_resume(args):
+    try:
+        _emit_or_exit(comfy_cloud.resume_output(Path(args.output)))
+    except Exception as e:
+        result_json(False, error=str(e), provider="comfy-cloud")
+        sys.exit(1)
+
+
 def cmd_set_budget(args):
     BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
     budget = {"budget_cents": args.cents, "log": []}
@@ -612,6 +620,10 @@ def main():
     p_res = sub.add_parser("resume", help="Resume a timed-out Tripo3D job from its sidecar (no extra cost)")
     p_res.add_argument("-o", "--output", required=True, help="Output path whose .tripo.json sidecar holds the pending task id(s)")
     p_res.set_defaults(func=cmd_resume)
+
+    p_comfy_res = sub.add_parser("comfy_resume", help="Resume a Comfy Cloud job from its .comfy.json sidecar")
+    p_comfy_res.add_argument("-o", "--output", required=True, help="Output path whose .comfy.json sidecar holds the pending prompt_id")
+    p_comfy_res.set_defaults(func=cmd_comfy_resume)
 
     p_budget = sub.add_parser("set_budget", help="Set the asset generation budget in cents")
     p_budget.add_argument("cents", type=int, help="Budget in cents")
