@@ -56,7 +56,7 @@ Godot and Bevy final proof bundles include `video.mp4` plus raw frames. Babylon 
 
 **Progressive loading.** The orchestrator reads only the stage file it needs at the moment. Support skills keep large engine references out of the main context.
 
-**Budget-aware asset generation.** Gemini, Grok, and Tripo3D are used where they make economic sense, and generated assets are assigned back into `PLAN.md` so implementation does not lose them.
+**Budget-aware asset generation.** Procedural assets, Codex task manifests, Dreamina, and Tripo3D are used where they make operational sense, and generated assets are assigned back into `PLAN.md` so implementation does not lose them.
 
 **Engine-specific expertise without agent duplication.** Godot, Bevy, and Babylon.js are different enough to keep their engine docs separate. Claude and Codex are similar enough to render from one source.
 

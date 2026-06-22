@@ -6,11 +6,11 @@ Generate a reference image of what the finished game looks like. Anchors art dir
 
 ```bash
 python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image \
-  --provider gemini --prompt "{prompt}" \
+  --provider codex --prompt "{prompt}" \
   --size 1K --aspect-ratio 16:9 -o reference.png
 ```
 
-Use `GODOGEN_IMAGE_PROVIDER` or `--provider openai|dreamina|gemini` if this fork is configured for a different reference-image provider. Do not use `--provider procedural` for the visual target; it is for debug assets and placeholders.
+Use `GODOGEN_IMAGE_PROVIDER` or `--provider dreamina` if this fork is configured for direct local generation. Do not use `--provider procedural` for the visual target; it is for debug assets and placeholders. If `codex` returns `pending`, complete the generated `.codex-task.json` manifest and create `reference.png` before downstream planning.
 
 ## Prompt
 

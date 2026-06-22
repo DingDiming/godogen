@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import subprocess
@@ -89,7 +88,7 @@ class AssetGenProviderTests(unittest.TestCase):
                     "-o",
                     str(output),
                 ],
-                env={"GODOGEN_IMAGE_PROVIDER": "gemini"},
+                env={"GODOGEN_IMAGE_PROVIDER": "codex"},
             )
 
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -339,40 +338,63 @@ class AssetGenProviderTests(unittest.TestCase):
                     ]:
                         self.assertNotIn(secret, combined)
 
-    def test_openai_image_dry_run_builds_images_api_request(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-openai-image.") as tmp:
-            output = Path(tmp) / "assets" / "img" / "openai.png"
+    def test_help_no_longer_exposes_direct_api_key_providers(self):
+        for subcommand in ("image", "texture", "video"):
+            with self.subTest(subcommand=subcommand):
+                proc = run_asset_gen([subcommand, "--help"])
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertNotIn("openai", proc.stdout)
+                self.assertNotIn("grok", proc.stdout)
+                self.assertNotIn("gemini", proc.stdout)
+                self.assertIn("codex", proc.stdout)
+
+    def test_codex_image_provider_queues_task_without_api_key(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-codex-image.") as tmp:
+            output = Path(tmp) / "assets" / "img" / "codex.png"
             proc = run_asset_gen(
                 [
                     "image",
                     "--provider",
-                    "openai",
-                    "--dry-run",
+                    "codex",
                     "--prompt",
                     "clean top-down cobblestone game texture",
                     "--aspect-ratio",
                     "16:9",
                     "-o",
                     str(output),
-                ]
+                ],
+                env={
+                    "OPENAI_API_KEY": "sk-test-secret-value",
+                    "GOOGLE_API_KEY": "google-secret-value",
+                    "XAI_API_KEY": "xai-secret-value",
+                },
             )
 
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1)
             result = parse_json_stdout(proc)
-            self.assertTrue(result["ok"])
-            self.assertTrue(result["dry_run"])
-            self.assertEqual(result["provider"], "openai")
-            self.assertEqual(result["path"], str(output))
-            request = result["request"]
-            self.assertEqual(request["url"], "https://api.openai.com/v1/images/generations")
-            self.assertEqual(request["payload"]["prompt"], "clean top-down cobblestone game texture")
-            self.assertEqual(request["payload"]["size"], "1536x1024")
-            self.assertEqual(request["payload"]["output_format"], "png")
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "codex")
+            self.assertEqual(result["target_path"], str(output))
+            task_path = Path(result["task_path"])
+            self.assertTrue(task_path.exists())
+            task = json.loads(task_path.read_text())
+            self.assertEqual(task["provider"], "codex")
+            self.assertEqual(task["task_type"], "image")
+            self.assertEqual(task["prompt"], "clean top-down cobblestone game texture")
+            self.assertEqual(task["target_path"], str(output))
+            self.assertEqual(task["status"], "pending")
+            self.assertFalse(output.exists())
+            combined = proc.stdout + proc.stderr + task_path.read_text()
+            self.assertNotIn("sk-test-secret-value", combined)
+            self.assertNotIn("google-secret-value", combined)
+            self.assertNotIn("xai-secret-value", combined)
 
-    def test_openai_image_edit_dry_run_builds_edits_api_request(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-openai-edit.") as tmp:
+    def test_codex_image_provider_records_reference_image_task(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-codex-edit.") as tmp:
             source = Path(tmp) / "refs" / "source.png"
-            output = Path(tmp) / "assets" / "img" / "openai_edit.png"
+            output = Path(tmp) / "assets" / "img" / "codex_edit.png"
             source.parent.mkdir(parents=True)
             source.write_bytes(PNG_1X1)
 
@@ -380,8 +402,7 @@ class AssetGenProviderTests(unittest.TestCase):
                 [
                     "image",
                     "--provider",
-                    "openai",
-                    "--dry-run",
+                    "codex",
                     "--prompt",
                     "turn the grass tile into snow",
                     "--image",
@@ -391,21 +412,18 @@ class AssetGenProviderTests(unittest.TestCase):
                 ]
             )
 
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1)
             result = parse_json_stdout(proc)
-            self.assertTrue(result["ok"])
-            self.assertTrue(result["dry_run"])
-            self.assertEqual(result["provider"], "openai")
-            request = result["request"]
-            self.assertEqual(request["url"], "https://api.openai.com/v1/images/edits")
-            self.assertEqual(request["payload"]["prompt"], "turn the grass tile into snow")
-            self.assertEqual(request["payload"]["images"][0]["image_url"], f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}")
-            self.assertEqual(request["payload"]["output_format"], "png")
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            task = json.loads(Path(result["task_path"]).read_text())
+            self.assertEqual(task["source_image"], str(source))
+            self.assertEqual(task["task_type"], "image")
 
-    def test_openai_video_dry_run_builds_videos_api_request(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-openai-video.") as tmp:
+    def test_codex_video_provider_queues_task_with_reference_image(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-codex-video.") as tmp:
             first_frame = Path(tmp) / "assets" / "img" / "first.png"
-            output = Path(tmp) / "assets" / "video" / "openai.mp4"
+            output = Path(tmp) / "assets" / "video" / "codex.mp4"
             first_frame.parent.mkdir(parents=True)
             first_frame.write_bytes(PNG_1X1)
 
@@ -413,8 +431,7 @@ class AssetGenProviderTests(unittest.TestCase):
                 [
                     "video",
                     "--provider",
-                    "openai",
-                    "--dry-run",
+                    "codex",
                     "--prompt",
                     "slow camera push across a stone floor",
                     "--image",
@@ -430,89 +447,16 @@ class AssetGenProviderTests(unittest.TestCase):
                 ]
             )
 
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-            result = parse_json_stdout(proc)
-            self.assertTrue(result["ok"])
-            self.assertTrue(result["dry_run"])
-            self.assertEqual(result["provider"], "openai")
-            self.assertEqual(result["path"], str(output))
-            request = result["request"]
-            self.assertEqual(request["url"], "https://api.openai.com/v1/videos")
-            self.assertEqual(request["poll_url"], "https://api.openai.com/v1/videos/{video_id}")
-            self.assertEqual(request["download_url"], "https://api.openai.com/v1/videos/{video_id}/content")
-            self.assertEqual(request["payload"]["model"], "sora-2")
-            self.assertEqual(request["payload"]["prompt"], "slow camera push across a stone floor")
-            self.assertEqual(request["payload"]["seconds"], "4")
-            self.assertEqual(request["payload"]["size"], "1280x720")
-            self.assertEqual(
-                request["payload"]["input_reference"]["image_url"],
-                f"data:image/png;base64,{base64.b64encode(PNG_1X1).decode()}",
-            )
-            self.assertIn("deprecation", result)
-            self.assertIn("September 24, 2026", result["deprecation"])
-
-    def test_openai_video_env_provider_dry_run(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-openai-video-env.") as tmp:
-            first_frame = Path(tmp) / "assets" / "img" / "first.png"
-            output = Path(tmp) / "assets" / "video" / "openai.mp4"
-            first_frame.parent.mkdir(parents=True)
-            first_frame.write_bytes(PNG_1X1)
-
-            proc = run_asset_gen(
-                [
-                    "video",
-                    "--dry-run",
-                    "--prompt",
-                    "slow camera push",
-                    "--image",
-                    str(first_frame),
-                    "--duration",
-                    "8",
-                    "--resolution",
-                    "720p",
-                    "-o",
-                    str(output),
-                ],
-                env={"GODOGEN_VIDEO_PROVIDER": "openai"},
-            )
-
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-            result = parse_json_stdout(proc)
-            self.assertTrue(result["ok"])
-            self.assertEqual(result["provider"], "openai")
-            self.assertEqual(result["request"]["payload"]["seconds"], "8")
-
-    def test_openai_video_rejects_unsupported_duration(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-openai-video-duration.") as tmp:
-            first_frame = Path(tmp) / "assets" / "img" / "first.png"
-            output = Path(tmp) / "assets" / "video" / "openai.mp4"
-            first_frame.parent.mkdir(parents=True)
-            first_frame.write_bytes(PNG_1X1)
-
-            proc = run_asset_gen(
-                [
-                    "video",
-                    "--provider",
-                    "openai",
-                    "--dry-run",
-                    "--prompt",
-                    "slow camera push",
-                    "--image",
-                    str(first_frame),
-                    "--duration",
-                    "5",
-                    "--resolution",
-                    "720p",
-                    "-o",
-                    str(output),
-                ]
-            )
-
             self.assertEqual(proc.returncode, 1)
             result = parse_json_stdout(proc)
             self.assertFalse(result["ok"])
-            self.assertEqual(result["provider"], "openai")
-            self.assertIn("4, 8, 12", result["error"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "codex")
+            task = json.loads(Path(result["task_path"]).read_text())
+            self.assertEqual(task["task_type"], "video")
+            self.assertEqual(task["source_image"], str(first_frame))
+            self.assertEqual(task["duration"], 4)
+            self.assertEqual(task["resolution"], "720p")
 
     def test_texture_defaults_to_procedural_tile(self):
         with tempfile.TemporaryDirectory(prefix="godogen-texture-procedural.") as tmp:
@@ -534,15 +478,14 @@ class AssetGenProviderTests(unittest.TestCase):
             self.assertEqual(result["path"], str(output))
             self.assertEqual(output.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
-    def test_texture_can_use_image_provider_dry_run(self):
-        with tempfile.TemporaryDirectory(prefix="godogen-texture-openai.") as tmp:
+    def test_texture_can_queue_codex_image_task(self):
+        with tempfile.TemporaryDirectory(prefix="godogen-texture-codex.") as tmp:
             output = Path(tmp) / "assets" / "img" / "texture.png"
             proc = run_asset_gen(
                 [
                     "texture",
                     "--provider",
-                    "openai",
-                    "--dry-run",
+                    "codex",
                     "--prompt",
                     "seamless wet cobblestone game texture",
                     "--aspect-ratio",
@@ -552,12 +495,14 @@ class AssetGenProviderTests(unittest.TestCase):
                 ]
             )
 
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1)
             result = parse_json_stdout(proc)
-            self.assertTrue(result["ok"])
-            self.assertTrue(result["dry_run"])
-            self.assertEqual(result["provider"], "openai")
-            self.assertEqual(result["request"]["url"], "https://api.openai.com/v1/images/generations")
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["provider"], "codex")
+            task = json.loads(Path(result["task_path"]).read_text())
+            self.assertEqual(task["task_type"], "texture")
+            self.assertEqual(task["target_path"], str(output))
 
 
 if __name__ == "__main__":

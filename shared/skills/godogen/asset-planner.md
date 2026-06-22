@@ -21,7 +21,7 @@ Read `reference.png` — understand the visual composition: what objects are vis
 Read `STRUCTURE.md` (especially **Asset Hints**) and `PLAN.md` (especially **Assets needed** per task). Cross-reference both with the reference image to build the complete asset list:
 - **3D models**: characters, vehicles, key props, buildings — anything that needs geometry
 - **Textures**: ground surfaces, walls, UI backgrounds — flat materials that tile
-- **Backgrounds**: sky panoramas, parallax layers, title screens, large scenic images — use `--provider gemini --size 2K` or another configured image provider with an appropriate `--aspect-ratio`
+- **Backgrounds**: sky panoramas, parallax layers, title screens, large scenic images — use `--provider codex --size 2K` or Dreamina with an appropriate `--aspect-ratio`
 - **Animated sprites**: characters or objects with multiple actions (walk, attack, idle) — plan the motion graph before generating
 
 The scaffold's Asset Hints describe what the architecture needs. The decomposer's Assets needed fields describe what each task needs. Reconcile both — they may overlap or one may mention assets the other missed.
@@ -31,19 +31,16 @@ Keep runtime-loaded outputs under `assets/` so the engine can load them at runti
 ### 2. Prioritize and budget
 
 Each asset costs:
-- Texture / simple sprite (Grok): 2 cents
 - Debug texture / grid / flat UI panel / placeholder (procedural): 0 cents
-- Character / reference / 3D ref (Gemini 1K): 7 cents
-- Background: 2 cents (Grok, simple scenic) or 10 cents (Gemini 2K, precise layout)
-- Dreamina/OpenAI images and videos: recorded as 0 cents by Godogen because they bill through provider credits/API billing, not the cents table
-- 3D model: 37 cents (7 cent Gemini image + 30 cent GLB at medium quality)
+- Codex queued image/video task: 0 cents in Godogen; completion is tracked by the generated task manifest
+- Dreamina image/video: 0 cents in Godogen; consumes Dreamina credits outside the cents table
+- 3D model: approved reference image route + 30-60 cents GLB cost
 
 Animated sprites cost more — budget carefully:
-- Reference image (Gemini 1K): 7 cents (once per character — all animations share it)
-- Root action (from ref): 7 cent Gemini pose + 5 cents × duration
-- Chained action (from predecessor's last frame): 5 cents × duration only
-- Example: knight with walk 3s, idle 2s (roots) + attack 2s (chained from walk)
-  = 7 (ref) + 22 (walk) + 17 (idle) + 10 (attack) = 56 cents
+- Reference image: once per character — all animations share it
+- Root action: pose frame + video
+- Chained action: video from predecessor's last frame when possible
+- Treat Codex queued tasks as pending until the manifest is completed and the target file exists.
 
 Prioritize by visual impact — what makes the game recognizable. Cut low-impact assets first if budget is tight. Reserve ~10% of budget for retries.
 
@@ -59,7 +56,7 @@ Craft each prompt for its specific goal. The art direction tells you the visual 
 
 #### Backend selection
 
-Use `--provider gemini` where prompt precision matters — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Use Grok (default) for simple objects, item kits, and simple scenic backgrounds (sky, clouds, abstract). For textures, prefer `asset_gen.py texture`: leave the default procedural route for debug grids, flat colors, noise terrain, simple tiles, UI panels, and placeholders; choose `texture --provider <image-provider>` when the surface needs style/detail. Use Dreamina/OpenAI only when configured and when the provider's billing/login state is acceptable for the run.
+Use `--provider codex` where prompt precision, host-agent monitoring, or human review matters — reference images, character design, 3D model references, animated sprite refs/poses, and backgrounds with precise layout. Use Dreamina when local login state is available and immediate provider submission is desired. For textures, prefer `asset_gen.py texture`: leave the default procedural route for debug grids, flat colors, noise terrain, simple tiles, UI panels, and placeholders; choose `texture --provider codex` when the surface needs style/detail.
 
 #### Using image references for consistency
 
@@ -83,7 +80,7 @@ To prevent cost overruns, a JSON log is automatically maintained that tracks the
 #### Common Mistakes
 
 - **Detailed image shrunk to a tile** — minimum generation resolution is 1K. A 1024px image downscaled to 64px looks muddy. For small sprites: avoid tiny display sizes (128px+ preferred), generate a kit image with multiple objects sharing one 1K image and crop, or prompt for bold simple forms (thick outlines, flat colors, exaggerated proportions).
-- **Tiling texture for a unique background** — don't tile a small repeating texture where the game needs a single scenic background. Use `--provider gemini --size 2K` or another configured image provider instead.
+- **Tiling texture for a unique background** — don't tile a small repeating texture where the game needs a single scenic background. Use `--provider codex --size 2K` or Dreamina instead.
 - **Image where procedural generation works** — grids, flat colors, noise terrain, simple repeated tiles, UI panels, and placeholder/debug sprites should use `--provider procedural`. Artistic characters, hero backgrounds, 3D model references, and style-bearing objects should use an image provider and then be reviewed in-game.
 - **Stretching one texture over a large area** — a small texture stretched across a big surface looks blurry. Use a tileable texture or generate at higher resolution.
 

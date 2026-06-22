@@ -15,6 +15,8 @@ class GodogenDdmCliTests(unittest.TestCase):
     def test_check_env_reports_key_status_without_values(self):
         env = os.environ.copy()
         env["OPENAI_API_KEY"] = "sk-test-secret-value"
+        env["GOOGLE_API_KEY"] = "google-secret-value"
+        env["XAI_API_KEY"] = "xai-secret-value"
         env["GODOGEN_IMAGE_PROVIDER"] = "procedural"
 
         proc = subprocess.run(
@@ -33,8 +35,12 @@ class GodogenDdmCliTests(unittest.TestCase):
         self.assertIn("ffmpeg:", proc.stdout)
         self.assertIn("dreamina:", proc.stdout)
         self.assertIn("GODOGEN_IMAGE_PROVIDER=set", proc.stdout)
-        self.assertIn("OPENAI_API_KEY=set", proc.stdout)
+        self.assertNotIn("OPENAI_API_KEY", proc.stdout)
+        self.assertNotIn("GOOGLE_API_KEY", proc.stdout)
+        self.assertNotIn("XAI_API_KEY", proc.stdout)
         self.assertNotIn("sk-test-secret-value", proc.stdout)
+        self.assertNotIn("google-secret-value", proc.stdout)
+        self.assertNotIn("xai-secret-value", proc.stdout)
 
     def test_publish_godot_codex_generates_runtime_layout(self):
         with tempfile.TemporaryDirectory(prefix="godogen-ddm-publish.") as tmp:
@@ -156,6 +162,8 @@ class GodogenDdmCliTests(unittest.TestCase):
     def test_external_smoke_defaults_to_non_paid_dry_run_without_leaking_keys(self):
         env = os.environ.copy()
         env["OPENAI_API_KEY"] = "sk-test-secret-value"
+        env["GOOGLE_API_KEY"] = "google-secret-value"
+        env["XAI_API_KEY"] = "xai-secret-value"
         env["TRIPO3D_API_KEY"] = "tripo-secret-value"
 
         with tempfile.TemporaryDirectory(prefix="godogen-ddm-external-dry.") as tmp:
@@ -171,16 +179,21 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertIn("external-smoke: dry-run", proc.stdout)
             self.assertIn("dreamina-video: dry-run", proc.stdout)
-            self.assertIn("openai-image: dry-run", proc.stdout)
-            self.assertIn("openai-video: dry-run", proc.stdout)
+            self.assertIn("codex-image: dry-run", proc.stdout)
+            self.assertIn("codex-video: dry-run", proc.stdout)
             self.assertIn("tripo3d-glb: skipped", proc.stdout)
             self.assertIn("--yes-charge", proc.stdout)
             self.assertNotIn("sk-test-secret-value", proc.stdout)
+            self.assertNotIn("google-secret-value", proc.stdout)
+            self.assertNotIn("xai-secret-value", proc.stdout)
             self.assertNotIn("tripo-secret-value", proc.stdout)
+            self.assertNotIn("openai", proc.stdout.lower())
 
     def test_external_smoke_yes_charge_requires_credentials(self):
         env = os.environ.copy()
         env.pop("OPENAI_API_KEY", None)
+        env.pop("GOOGLE_API_KEY", None)
+        env.pop("XAI_API_KEY", None)
         env.pop("TRIPO3D_API_KEY", None)
         env["GODOGEN_DREAMINA_BIN"] = str(REPO_ROOT / "missing-dreamina")
 
@@ -194,9 +207,11 @@ class GodogenDdmCliTests(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 2)
-        self.assertIn("OPENAI_API_KEY=missing", proc.stderr)
         self.assertIn("TRIPO3D_API_KEY=missing", proc.stderr)
         self.assertIn("dreamina=missing", proc.stderr)
+        self.assertNotIn("OPENAI_API_KEY", proc.stderr)
+        self.assertNotIn("GOOGLE_API_KEY", proc.stderr)
+        self.assertNotIn("XAI_API_KEY", proc.stderr)
 
     def test_external_smoke_yes_charge_can_run_against_fake_asset_provider(self):
         with tempfile.TemporaryDirectory(prefix="godogen-ddm-external-paid.") as tmp:
@@ -224,6 +239,8 @@ class GodogenDdmCliTests(unittest.TestCase):
             env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
             env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
             env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["GOOGLE_API_KEY"] = "google-secret-value"
+            env["XAI_API_KEY"] = "xai-secret-value"
             env["TRIPO3D_API_KEY"] = "tripo-secret-value"
 
             proc = subprocess.run(
@@ -238,10 +255,11 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertIn("external-smoke: paid-run", proc.stdout)
             self.assertIn("dreamina-video: ok", proc.stdout)
-            self.assertIn("openai-image: ok", proc.stdout)
-            self.assertIn("openai-video: ok", proc.stdout)
             self.assertIn("tripo3d-glb: ok", proc.stdout)
+            self.assertNotIn("openai", proc.stdout.lower())
             self.assertNotIn("sk-test-secret-value", proc.stdout)
+            self.assertNotIn("google-secret-value", proc.stdout)
+            self.assertNotIn("xai-secret-value", proc.stdout)
             self.assertNotIn("tripo-secret-value", proc.stdout)
 
     def test_external_smoke_yes_charge_summarizes_pending_provider(self):
@@ -274,6 +292,8 @@ class GodogenDdmCliTests(unittest.TestCase):
             env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
             env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
             env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["GOOGLE_API_KEY"] = "google-secret-value"
+            env["XAI_API_KEY"] = "xai-secret-value"
             env["TRIPO3D_API_KEY"] = "tripo-secret-value"
 
             proc = subprocess.run(
@@ -289,10 +309,11 @@ class GodogenDdmCliTests(unittest.TestCase):
             self.assertIn("external-smoke: incomplete", proc.stdout)
             self.assertIn("dreamina-video: pending", proc.stdout)
             self.assertIn("dreamina-submit-123", proc.stdout)
-            self.assertIn("openai-image: ok", proc.stdout)
-            self.assertIn("openai-video: ok", proc.stdout)
             self.assertIn("tripo3d-glb: ok", proc.stdout)
+            self.assertNotIn("openai", proc.stdout.lower())
             self.assertNotIn("sk-test-secret-value", proc.stdout)
+            self.assertNotIn("google-secret-value", proc.stdout)
+            self.assertNotIn("xai-secret-value", proc.stdout)
             self.assertNotIn("tripo-secret-value", proc.stdout)
 
     def test_external_smoke_yes_charge_does_not_persist_raw_provider_logs(self):
@@ -323,6 +344,8 @@ class GodogenDdmCliTests(unittest.TestCase):
             env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
             env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
             env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["GOOGLE_API_KEY"] = "google-secret-value"
+            env["XAI_API_KEY"] = "xai-secret-value"
             env["TRIPO3D_API_KEY"] = "tripo-secret-value"
 
             out_dir = root / "out"
@@ -339,6 +362,8 @@ class GodogenDdmCliTests(unittest.TestCase):
             combined_output = proc.stdout + proc.stderr
             for secret in [
                 "sk-test-secret-value",
+                "google-secret-value",
+                "xai-secret-value",
                 "tripo-secret-value",
                 "dreamina-token-secret",
                 "dreamina-balance-secret",
@@ -351,6 +376,8 @@ class GodogenDdmCliTests(unittest.TestCase):
                     data = path.read_bytes()
                     if any(secret.encode() in data for secret in [
                         "sk-test-secret-value",
+                        "google-secret-value",
+                        "xai-secret-value",
                         "tripo-secret-value",
                         "dreamina-token-secret",
                         "dreamina-balance-secret",
@@ -369,8 +396,8 @@ class GodogenDdmCliTests(unittest.TestCase):
                 "out = Path(args[args.index('-o') + 1])\n"
                 "out.parent.mkdir(parents=True, exist_ok=True)\n"
                 "provider = args[args.index('--provider') + 1] if '--provider' in args else 'procedural'\n"
-                "if args[0] == 'image' and provider == 'openai':\n"
-                "    print(json.dumps({'ok': False, 'provider': 'openai', 'error': 'failed with sk-test-secret-value tripo-secret-value dreamina-token-secret'}))\n"
+                "if args[0] == 'glb':\n"
+                "    print(json.dumps({'ok': False, 'provider': 'tripo3d', 'error': 'failed with sk-test-secret-value google-secret-value xai-secret-value tripo-secret-value dreamina-token-secret'}))\n"
                 "    sys.exit(1)\n"
                 "if args[0] in {'image', 'texture'}:\n"
                 "    out.write_bytes(bytes.fromhex('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c49444154789c63606060000000040001f61738550000000049454e44ae426082'))\n"
@@ -388,6 +415,8 @@ class GodogenDdmCliTests(unittest.TestCase):
             env["GODOGEN_DDM_ASSET_GEN"] = str(fake_asset)
             env["GODOGEN_DREAMINA_BIN"] = str(fake_dreamina)
             env["OPENAI_API_KEY"] = "sk-test-secret-value"
+            env["GOOGLE_API_KEY"] = "google-secret-value"
+            env["XAI_API_KEY"] = "xai-secret-value"
             env["TRIPO3D_API_KEY"] = "tripo-secret-value"
 
             proc = subprocess.run(
@@ -401,10 +430,12 @@ class GodogenDdmCliTests(unittest.TestCase):
 
             self.assertEqual(proc.returncode, 1)
             self.assertIn("external-smoke: incomplete", proc.stdout)
-            self.assertIn("openai-image: failed", proc.stdout)
+            self.assertIn("tripo3d-glb: failed", proc.stdout)
             combined_output = proc.stdout + proc.stderr
             for secret in [
                 "sk-test-secret-value",
+                "google-secret-value",
+                "xai-secret-value",
                 "tripo-secret-value",
                 "dreamina-token-secret",
             ]:

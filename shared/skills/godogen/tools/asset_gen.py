@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Asset Generator CLI - creates images/videos via providers and GLBs via Tripo3D.
+"""Asset Generator CLI - creates images/videos via keyless providers and GLBs via Tripo3D.
 
 Subcommands:
   image     Generate a PNG from a prompt
@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from providers import dreamina_cli, gemini, grok, openai_image, openai_video, procedural
+from providers import codex_task, dreamina_cli, procedural
 from providers.common import ProviderResult
 
 TOOLS_DIR = Path(__file__).parent
@@ -112,10 +112,22 @@ def emit_provider_result(result: ProviderResult) -> None:
 
 # --- Image/video provider routing ---
 
-IMAGE_PROVIDERS = ["grok", "gemini", "dreamina", "openai", "procedural"]
-VIDEO_PROVIDERS = ["grok", "dreamina", "openai"]
+IMAGE_PROVIDERS = ["dreamina", "procedural", "codex"]
+VIDEO_PROVIDERS = ["dreamina", "codex"]
 ALL_SIZES = ["512", "1K", "2K", "4K"]
-ALL_ASPECT_RATIOS = sorted(set(gemini.GEMINI_ASPECT_RATIOS + grok.GROK_ASPECT_RATIOS))
+ALL_ASPECT_RATIOS = [
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "4:5",
+    "5:4",
+    "21:9",
+    "auto",
+]
 
 
 def _selected_provider(cli_provider: str | None, env_var: str, fallback: str) -> str:
@@ -145,21 +157,7 @@ def _run_image_provider(args, output: Path, provider: str, kind: str = "image") 
     print(f"Generating {kind} ({label})...", file=sys.stderr)
 
     try:
-        if provider == "gemini":
-            if args.size not in gemini.GEMINI_SIZES:
-                _fail_provider_error(f"Gemini does not support size {args.size}. Use: {', '.join(gemini.GEMINI_SIZES)}")
-            cost = gemini.GEMINI_COSTS[args.size]
-            check_budget(cost)
-            _emit_or_exit(gemini.generate_image(args, output, cost), "gemini")
-
-        elif provider == "grok":
-            if args.size not in grok.GROK_SIZES:
-                _fail_provider_error(f"Grok does not support size {args.size}. Use: {', '.join(grok.GROK_SIZES)}")
-            cost = grok.GROK_IMAGE_COST
-            check_budget(cost)
-            _emit_or_exit(grok.generate_image(args, output, cost), "xai")
-
-        elif provider == "procedural":
+        if provider == "procedural":
             check_budget(0)
             _emit_or_exit(procedural.generate_image(args, output))
 
@@ -167,9 +165,9 @@ def _run_image_provider(args, output: Path, provider: str, kind: str = "image") 
             check_budget(dreamina_cli.DREAMINA_IMAGE_COST_CENTS)
             _emit_or_exit(dreamina_cli.generate_image(args, output))
 
-        elif provider == "openai":
-            check_budget(openai_image.OPENAI_IMAGE_COST_CENTS)
-            _emit_or_exit(openai_image.generate_image(args, output))
+        elif provider == "codex":
+            check_budget(codex_task.CODEX_TASK_COST_CENTS)
+            _emit_or_exit(codex_task.generate_image(args, output, kind))
 
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
@@ -177,7 +175,7 @@ def _run_image_provider(args, output: Path, provider: str, kind: str = "image") 
 
 
 def cmd_image(args):
-    provider = _selected_provider(args.provider, "GODOGEN_IMAGE_PROVIDER", args.model)
+    provider = _selected_provider(args.provider, "GODOGEN_IMAGE_PROVIDER", "codex")
     _run_image_provider(args, Path(args.output), provider, kind="image")
 
 
@@ -187,7 +185,7 @@ def cmd_texture(args):
 
 
 def cmd_video(args):
-    provider = _selected_provider(args.provider, "GODOGEN_VIDEO_PROVIDER", "grok")
+    provider = _selected_provider(args.provider, "GODOGEN_VIDEO_PROVIDER", "dreamina")
     if provider not in VIDEO_PROVIDERS:
         _fail_provider_error(f"Unknown video provider: {provider}. Use: {', '.join(VIDEO_PROVIDERS)}")
 
@@ -200,18 +198,13 @@ def cmd_video(args):
     print(f"Generating {args.duration}s video ({provider} {args.resolution})...", file=sys.stderr)
 
     try:
-        if provider == "grok":
-            cost = args.duration * grok.GROK_VIDEO_COST_PER_SEC
-            check_budget(cost)
-            _emit_or_exit(grok.generate_video(args, output, cost), "xai-video")
-
-        elif provider == "dreamina":
+        if provider == "dreamina":
             check_budget(dreamina_cli.DREAMINA_VIDEO_COST_CENTS)
             _emit_or_exit(dreamina_cli.generate_video(args, output))
 
-        elif provider == "openai":
-            check_budget(openai_video.OPENAI_VIDEO_COST_CENTS)
-            _emit_or_exit(openai_video.generate_video(args, output))
+        elif provider == "codex":
+            check_budget(codex_task.CODEX_TASK_COST_CENTS)
+            _emit_or_exit(codex_task.generate_video(args, output))
 
     except Exception as e:
         result_json(False, error=str(e), provider=provider)
@@ -520,17 +513,15 @@ def cmd_set_budget(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Asset Generator — provider-based images/videos and GLBs (Tripo3D)")
+    parser = argparse.ArgumentParser(description="Asset Generator — keyless images/videos and GLBs (Tripo3D)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_img = sub.add_parser("image", help="Generate a PNG image")
     p_img.add_argument("--prompt", required=True, help="Full image generation prompt")
     p_img.add_argument("--provider", choices=IMAGE_PROVIDERS, default=None,
-                       help="Provider override. Env fallback: GODOGEN_IMAGE_PROVIDER. Default remains --model/grok.")
-    p_img.add_argument("--model", choices=["gemini", "grok"], default="grok",
-                       help="Legacy image backend selector used when --provider and GODOGEN_IMAGE_PROVIDER are unset. Default: grok.")
+                       help="Provider override. Env fallback: GODOGEN_IMAGE_PROVIDER. Default: codex task queue.")
     p_img.add_argument("--size", choices=ALL_SIZES, default="1K",
-                       help="Resolution. Grok: 1K, 2K. Gemini/procedural: 512, 1K, 2K, 4K. Default: 1K.")
+                       help="Resolution hint. Default: 1K.")
     p_img.add_argument("--aspect-ratio", choices=ALL_ASPECT_RATIOS, default="1:1",
                        help="Aspect ratio. Default: 1:1")
     p_img.add_argument("--image", default=None, help="Reference image for image-to-image edit")
@@ -547,8 +538,6 @@ def main():
     p_tex.add_argument("--prompt", required=True, help="Texture generation prompt")
     p_tex.add_argument("--provider", choices=IMAGE_PROVIDERS, default=None,
                        help="Provider override. Env fallback: GODOGEN_IMAGE_PROVIDER. Default: procedural.")
-    p_tex.add_argument("--model", choices=["gemini", "grok"], default="grok",
-                       help="Legacy image backend selector if an image provider is selected through --provider/env.")
     p_tex.add_argument("--size", choices=ALL_SIZES, default="1K",
                        help="Resolution. Default: 1K.")
     p_tex.add_argument("--aspect-ratio", choices=ALL_ASPECT_RATIOS, default="1:1",
@@ -565,14 +554,14 @@ def main():
 
     p_vid = sub.add_parser("video", help="Generate MP4 video from prompt + reference image")
     p_vid.add_argument("--provider", choices=VIDEO_PROVIDERS, default=None,
-                       help="Provider override. Env fallback: GODOGEN_VIDEO_PROVIDER. Default: grok.")
+                       help="Provider override. Env fallback: GODOGEN_VIDEO_PROVIDER. Default: dreamina.")
     p_vid.add_argument("--prompt", required=True, help="Video generation prompt")
     p_vid.add_argument("--image", required=True, help="Reference image path (starting frame)")
     p_vid.add_argument("--duration", type=int, required=True, help="Duration in seconds (1-15)")
     p_vid.add_argument("--resolution", choices=["480p", "720p"], default="720p",
                        help="Video resolution. Default: 720p")
     p_vid.add_argument("--poll", type=int, default=0,
-                       help="Dreamina/OpenAI: poll up to N seconds after submit. Default: 0")
+                       help="Dreamina: poll up to N seconds after submit. Default: 0")
     p_vid.add_argument("--dry-run", action="store_true",
                        help="Build provider command without submitting a paid generation task.")
     p_vid.add_argument("-o", "--output", required=True, help="Output MP4 path")

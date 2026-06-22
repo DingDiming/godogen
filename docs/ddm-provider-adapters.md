@@ -21,18 +21,18 @@ The branch keeps upstream Godogen's render model: source files live under `share
 
 Supported routes:
 
-- Image: `grok`, `gemini`, `dreamina`, `openai`, `procedural`
-- Video: `grok`, `dreamina`, `openai`
+- Image: `dreamina`, `procedural`, `codex`
+- Video: `dreamina`, `codex`
 - Texture: defaults to `procedural`, but can use any image provider
 - 3D: Tripo3D `glb`, `rig`, `retarget`, and `resume` remain in place
 
 Provider selection:
 
-- `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural`
-- `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai`
+- `GODOGEN_IMAGE_PROVIDER=dreamina|procedural|codex`
+- `GODOGEN_VIDEO_PROVIDER=dreamina|codex`
 - CLI `--provider` overrides environment selection
-- Legacy image `--model grok|gemini` remains available when no provider override is set
 - Image-to-image providers require an existing `--image` reference file before command construction.
+- `codex` queues a local `*.codex-task.json` manifest and returns `pending` until automation writes the target asset.
 
 ## CLI
 
@@ -60,7 +60,8 @@ The wrapper auto-locates `asset_gen.py` in either source layout or published run
 
 - `check-env` prints provider env status as `set` or `unset`; it does not print key values.
 - Dreamina non-pending failures return a short exit-code summary and suppress raw CLI stdout/stderr.
-- `external-smoke --yes-charge` is the only path that submits real Dreamina/OpenAI/Tripo3D tasks.
+- Direct remote API-key image/video providers are not exposed by this branch.
+- `external-smoke --yes-charge` is the only path that submits real Dreamina/Tripo3D tasks.
 - `external-smoke --yes-charge` summarizes provider `pending` and `failed` states, exits nonzero when any provider is incomplete, and does not persist raw provider logs in the output directory.
 - Provider JSON error summaries redact known key/token-shaped values before printing.
 - A provider success response is not final asset acceptance. Generated assets still need engine import/build/capture verification in the target game.
@@ -81,7 +82,7 @@ bin/godogen-ddm verify --skip-tests --skip-smoke --skip-external-smoke --out /tm
 
 ## Remaining Explicit Authorization
 
-Do not run this without explicit user approval because it can consume provider credits/API billing:
+Do not run this without explicit user approval because it can consume provider credits:
 
 ```bash
 bin/godogen-ddm external-smoke --yes-charge --out /tmp/godogen-external-paid-smoke

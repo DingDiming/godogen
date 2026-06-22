@@ -6,35 +6,21 @@ Generate PNG images and MP4 videos through configurable providers, and GLB 3D mo
 
 | Provider | Enable | Cost | Best for |
 |----------|--------|------|----------|
-| Grok image/video | default, or `--provider grok` | image 2¢, video 5¢/sec | Textures, simple objects, item kits, legacy default video |
-| Gemini image | `--provider gemini` or legacy `--model gemini` | 5-15¢ by size | Precise references, characters, backgrounds, 3D refs |
 | Dreamina image/video | `--provider dreamina` | Dreamina credits, recorded as 0 cents here | Local CLI image/video generation with login state |
-| OpenAI image/video | `--provider openai` | OpenAI API billing, recorded as 0 cents here | Images API and temporary Videos API (`sora-2`) generation |
 | Procedural image | `--provider procedural` | 0¢ | Debug tiles, grids, flat colors, placeholder sprites, UI panels |
+| Codex task queue | `--provider codex` | 0¢ in Godogen | Keyless handoff to Codex automation; returns `pending` until the asset is written |
 
 Provider selection:
-- `GODOGEN_IMAGE_PROVIDER=openai|dreamina|gemini|grok|procedural`
-- `GODOGEN_VIDEO_PROVIDER=dreamina|grok|openai`
+- `GODOGEN_IMAGE_PROVIDER=dreamina|procedural|codex`
+- `GODOGEN_VIDEO_PROVIDER=dreamina|codex`
 - CLI `--provider` overrides the environment variable.
-- Legacy `--model grok|gemini` still works for image generation when no provider override is set.
 
 **When to use which:**
-- **Gemini** — reference images, character design, 3D model references, animated sprite refs/poses, backgrounds with precise layout. Gemini costs more but reliably produces what you described.
-- **Grok** — textures, simple objects, item kits, props, simple scenic backgrounds (sky, clouds, abstract). Produces high-quality (even photographic) output but often defaults to common interpretations instead of following specific instructions. Great when exact prompt adherence doesn't matter.
 - **Dreamina** — local CLI-backed image and video generation. Requires local Dreamina login state. Use `--dry-run` first when validating command construction. Non-pending failures return a short error summary; raw CLI stdout/stderr is suppressed because it may contain account, balance, or session material.
-- **OpenAI** — image generation via the OpenAI Images API and video generation via the Sora 2 Videos API. OpenAI marks Sora 2 Videos API as deprecated with a scheduled shutdown on September 24, 2026, so do not make it the only long-term video route. Requires `OPENAI_API_KEY` only when `--provider openai` is used without `--dry-run`.
 - **Procedural** — programmatic PNG generation. Use for grids, flat colors, noise terrain, simple tiles, UI panels, and placeholder/debug sprites.
+- **Codex** — writes a `.codex-task.json` manifest next to the target output and returns `pending`. Use when the asset should be produced by host-agent automation rather than a direct API-key provider.
 
-Default image provider is still `grok`. Default video provider is still `grok` unless `GODOGEN_VIDEO_PROVIDER` or `--provider` selects Dreamina or OpenAI.
-
-### Gemini sizes and costs
-
-| Size | Cost |
-|------|------|
-| `512` | 5¢ |
-| `1K` | 7¢ |
-| `2K` | 10¢ |
-| `4K` | 15¢ |
+Default image provider is `codex`. Default texture provider is `procedural`. Default video provider is `dreamina` unless `GODOGEN_VIDEO_PROVIDER` or `--provider` selects `codex`.
 
 ## CLI Reference
 
@@ -45,7 +31,7 @@ Keep runtime-loaded outputs under `assets/`. Put review-only references, scratch
 
 Every provider output must land under `assets/` or an explicit review/reference path such as `refs/`. A successful provider JSON response is not final asset acceptance: import/build the game and verify the asset in screenshots or video before calling the game task done.
 
-For source-repo operator checks, `bin/godogen-ddm external-smoke` creates a procedural first frame and validates Dreamina/OpenAI command construction without submitting paid work. `bin/godogen-ddm external-smoke --yes-charge` is the explicit opt-in path for real Dreamina/OpenAI/Tripo3D smoke and may consume provider credits/API billing. If any charged provider returns `pending` or `failed`, the wrapper prints an `incomplete` summary and exits nonzero; do not treat task submission as asset acceptance. Raw provider stdout/stderr is summarized, not persisted under the output directory, and JSON error summaries redact known key/token-shaped values.
+For source-repo operator checks, `bin/godogen-ddm external-smoke` creates a procedural first frame and validates Dreamina/Codex command construction without submitting paid work. `bin/godogen-ddm external-smoke --yes-charge` is the explicit opt-in path for real Dreamina/Tripo3D smoke and may consume provider credits. If any charged provider returns `pending` or `failed`, the wrapper prints an `incomplete` summary and exits nonzero; do not treat task submission as asset acceptance. Raw provider stdout/stderr is summarized, not persisted under the output directory, and JSON error summaries redact known key/token-shaped values.
 
 ### Generate image
 
@@ -54,20 +40,16 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image \
   --prompt "the full prompt" -o assets/img/car.png
 ```
 
-`--provider`: `grok`, `gemini`, `dreamina`, `openai`, `procedural`
-`--model` (legacy default `grok`): `grok` (2¢), `gemini` (5-15¢ by size)
-`--size` (default `1K`): Grok: `1K`, `2K`. Gemini: `512`, `1K`, `2K`, `4K`.
-`--aspect-ratio` (default `1:1`): varies by backend — both support `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
+`--provider`: `dreamina`, `procedural`, `codex`
+`--size` (default `1K`): `512`, `1K`, `2K`, `4K` as provider hints.
+`--aspect-ratio` (default `1:1`): `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `4:5`, `5:4`, `21:9`, `auto`
 `--dry-run`: build a provider command/request without submitting a paid task.
 `--image`: reference image for image-to-image providers; the file must exist before submitting or dry-running the provider command.
 
 Typical combos:
-- `--provider gemini --size 1K` — reference images, character sprites, 3D refs (7¢)
-- `--provider gemini --size 2K --aspect-ratio 16:9` — backgrounds, title screens (10¢)
-- `--provider grok` — textures, simple objects, item kits (2¢)
 - `--provider procedural --procedural-kind grid` — local debug texture, no external call
 - `--provider dreamina --dry-run --poll 5` — validate Dreamina text2image/image2image command
-- `--provider openai --dry-run` — validate OpenAI Images API request without reading `OPENAI_API_KEY`
+- `--provider codex` — queue a Codex automation task and return `pending`
 
 Procedural examples:
 
@@ -83,28 +65,30 @@ Procedural kinds: `checker`, `flat`, `grid`, `noise`, `tile`, `ui_panel`, `place
 
 Read `${GODOGEN_SKILL_DIR}/rembg.md` for full guide: CLI, prompting strategy, troubleshooting, batch mode.
 
-### Generate animated sprite (7¢ ref + 7¢/pose + 5¢/sec video)
+### Generate animated sprite
 
 Workflow: reference → pose frame → video → slice → loop trim → rembg.
 
-**Step 1: Reference image (7¢ — Gemini)**
+**Step 1: Reference image**
 
-Gemini 1K, 1:1, neutral pose, solid BG — same color strategy as for rembg. Review carefully: this image anchors all subsequent poses and videos.
+Use Dreamina for direct local generation, or Codex queue when host-agent automation should create and review the image. Use a 1K, 1:1, neutral pose, solid BG — same color strategy as for rembg. Review carefully: this image anchors all subsequent poses and videos.
 
 ```bash
 python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image \
-  --provider gemini --size 1K \
+  --provider codex --size 1K \
   --prompt "knight in armor, neutral standing pose, facing right, solid dark-green background" \
   --aspect-ratio 1:1 -o assets/img/knight_ref.png
 ```
 
-**Step 2: Pose frame (7¢ — Gemini)**
+Codex returns a pending manifest. Automation must write `assets/img/knight_ref.png` before the next step.
 
-Image-to-image edit: feed the reference, prompt only for the action/pose. Gemini is preferred here — the pose must match the prompt precisely since it anchors the video.
+**Step 2: Pose frame**
+
+Image-to-image edit: feed the reference, prompt only for the action/pose. The pose must match the prompt precisely since it anchors the video.
 
 ```bash
 python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image \
-  --provider gemini \
+  --provider codex \
   --prompt "walking to the right, mid-stride pose, side view, solid dark-green background" \
   --image assets/img/knight_ref.png \
   --aspect-ratio 1:1 -o assets/img/knight_walk_pose.png
@@ -121,13 +105,13 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
   --duration 2 -o assets/video/knight_walk.mp4
 ```
 
-`--provider`: `grok` (default), `dreamina`, or `openai`
-`--duration`: Grok/Dreamina accept the existing 1-15 second range; OpenAI Videos API accepts only `4`, `8`, or `12`.
-`--resolution` (default `720p`): `720p`, `480p`. OpenAI uses `720p` as `1280x720`; this wrapper rejects `480p` for OpenAI because the official Videos API exposes fixed sizes instead.
-`--poll`: Dreamina/OpenAI only; wait up to N seconds for the async result.
+`--provider`: `dreamina` (default) or `codex`
+`--duration`: Dreamina accepts the existing 1-15 second range.
+`--resolution` (default `720p`): `720p`, `480p`.
+`--poll`: Dreamina only; wait up to N seconds for the async result.
 `--dry-run`: build the provider command without submitting a paid generation task.
 
-Grok has the legacy 5¢/sec estimate. Dreamina consumes Dreamina credits, not cents. OpenAI video uses OpenAI API billing, not the cents table. Godogen records `cost_cents: 0` for Dreamina/OpenAI so the JSON stays compatible without pretending to know exact provider pricing.
+Dreamina consumes Dreamina credits, not cents. Codex task queue records `cost_cents: 0` and returns `pending` until automation writes the target asset.
 
 Dreamina example:
 
@@ -141,21 +125,15 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
 
 If Dreamina returns a submit id but no media before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with a `dreamina query_result` hint. Do not treat pending as success. If it fails without a submit id, only the exit code summary is exposed.
 
-OpenAI example:
+Codex example:
 
 ```bash
 python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py video \
-  --provider openai --prompt "camera push across a stone floor" \
+  --provider codex --prompt "camera push across a stone floor" \
   --image assets/img/stone_floor_ref.png \
-  --duration 4 --resolution 720p --poll 120 \
+  --duration 4 --resolution 720p \
   -o assets/video/stone_floor_push.mp4
 ```
-
-If the OpenAI video job is still `queued` or `in_progress` before `--poll` expires, the command returns `{"ok": false, "pending": true, ...}` with the OpenAI video id and retrieve/download URLs. Do not treat pending as success.
-
-OpenAI video JSON also includes a `deprecation` field while this provider is backed by Sora 2 Videos API. Treat that as an operator warning, not an error.
-
-For Grok, same cost per second at both resolutions — always use `720p`. Fall back to `480p` only if 720p fails (e.g. timeout or API error).
 
 **Step 4: Extract frames**
 
@@ -186,7 +164,7 @@ python3 ${GODOGEN_SKILL_DIR}/tools/rembg_matting.py \
 
 **Step 7: Additional animations**
 
-Repeat from step 2 using the same reference image. Each new animation costs 7¢ (Gemini pose) + video duration × 5¢.
+Repeat from step 2 using the same reference image. Each new animation needs a reviewed pose frame and a Dreamina video or Codex queued video task.
 
 ### Convert image to static GLB (30-60 cents)
 
@@ -282,31 +260,25 @@ result=$(python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py image --prompt "..." -o
 
 | Operation | Options | Cost | Notes |
 |-----------|---------|------|-------|
-| Image | --model grok | 2 cents | Fast, simple images |
-| Image | --model gemini --size 512 | 5 cents | Small refs, quick tests |
-| Image | --model gemini --size 1K | 7 cents | References, characters, 3D refs |
-| Image | --model gemini --size 2K | 10 cents | Backgrounds, title screens |
-| Image | --model gemini --size 4K | 15 cents | Large maps, panoramas |
 | Image | --provider procedural | 0 cents | Debug textures, grids, flat UI panels, placeholders |
 | Image | --provider dreamina | 0 cents in Godogen log | Uses Dreamina credits; exact credit price is outside cents budget |
-| Image | --provider openai | 0 cents in Godogen log | Uses OpenAI API billing; requires `OPENAI_API_KEY` |
+| Image | --provider codex | 0 cents in Godogen log | Queues a Codex automation task and returns `pending` |
 | GLB | default | 30 cents | v3.1, 30k face cap, standard texture + PBR |
 | GLB | hd | 60 cents | v3.1, detailed geometry + HD texture + PBR |
 | Rig | biped | 25 cents | one-time per character, on top of the GLB cost |
 | Retarget | per animation | 10 cents | each clip is a separate task; reuses the rigged task id |
-| Video | --duration N | 5¢ × N seconds | Pose frame as starting image |
 | Video | --provider dreamina | 0 cents in Godogen log | Uses Dreamina credits; async result may be pending |
-| Video | --provider openai | 0 cents in Godogen log | Uses OpenAI API billing; async result may be pending |
+| Video | --provider codex | 0 cents in Godogen log | Queues a Codex automation task and returns `pending` |
 
-A full 3D asset (Gemini 1K image + default GLB) costs 37¢. A rigged biped character with walk/idle/attack is 37¢ + 25¢ rig + 3 × 10¢ retarget = 92¢. A texture (Grok) is 2¢. A background is 2¢ (Grok, simple) or 10¢ (Gemini 2K, precise layout). A 3-second 2D sprite animation costs 24¢ (7¢ Gemini ref + 7¢ pose + 10¢ video); additional animations from the same ref cost 7¢ pose + video.
+A full 3D asset costs the approved reference image route plus the Tripo3D GLB cost. A rigged biped character adds the GLB cost, 25¢ rig cost, and 10¢ per retargeted animation. Procedural and Codex queued assets record `0` cents in Godogen; Dreamina and Tripo3D still consume their own provider credits.
 
 ## Image Resolution
 
 Use the full generation resolution — don't downscale for aesthetic reasons.
 - Default (`1K`): textures, sprites, 3D references, character refs
-- `512` (Gemini only): quick tests
+- `512`: quick tests
 - `2K`: HQ objects/textures, backgrounds, title screens
-- `4K` (Gemini only): large game maps, panoramic backgrounds
+- `4K`: large game maps, panoramic backgrounds
 
 ### Small sprites problem
 
@@ -320,20 +292,18 @@ Minimum generation resolution is 1K. A 1024px image downscaled to 64px or even 1
 
 For any asset needing transparency, read `${GODOGEN_SKILL_DIR}/rembg.md` first — covers BG color strategy, CLI, and troubleshooting.
 
-### Background / large scenic image (2c Grok or 10c Gemini)
+### Background / large scenic image
 
 Title screens, sky panoramas, parallax layers, environmental art. Best place for art direction language.
-
-Grok works well for simple scenic backgrounds (sky, clouds, abstract environments) — 2¢. Use Gemini when layout and composition must match the prompt precisely (specific object placement, layered parallax with exact structure) — 10¢.
 
 ```
 {description in the art style}. {composition instructions}.
 ```
-`image --prompt "..." --size 2K --aspect-ratio 16:9 -o path.png` (Grok default, add `--provider gemini` for precise layout)
+`image --provider codex --prompt "..." --size 2K --aspect-ratio 16:9 -o path.png`
 
 No post-processing — use as-is.
 
-### Texture (2c Grok)
+### Texture
 
 Tileable surfaces: ground, walls, floors, UI panels. Use `texture` for the texture-specific entrypoint. It defaults to procedural tiles, and can switch to any image provider when style/detail matters.
 
@@ -348,11 +318,11 @@ python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py texture \
   -o assets/img/stone_floor.png
 ```
 
-Image provider route:
+Codex queued route:
 
 ```bash
 python3 ${GODOGEN_SKILL_DIR}/tools/asset_gen.py texture \
-  --provider openai --prompt "stylized wet cobblestone, seamless top-down game texture" \
+  --provider codex --prompt "stylized wet cobblestone, seamless top-down game texture" \
   -o assets/img/wet_cobblestone.png
 ```
 
@@ -360,17 +330,17 @@ No background removal — the entire image IS the texture.
 
 ### Single object / sprite
 
-**Simple objects** (2c Grok) — props, items, icons where exact appearance isn't critical:
+**Simple objects** — props, items, icons where exact appearance isn't critical:
 ```
 {name}, {description}. Centered on a solid {bg_color} background.
 ```
 `image --prompt "..." -o path.png`
 
-**Character design** (7c Gemini 1K) — player characters, enemies, NPCs where the design must match the prompt:
+**Character design** — player characters, enemies, NPCs where the design must match the prompt:
 ```
 {name}, {description}. Centered on a solid {bg_color} background.
 ```
-`image --provider gemini --prompt "..." -o path.png`
+`image --provider codex --prompt "..." -o path.png`
 
 **Variant from reference** (uses `--image`; see Tips for prompting guidance):
 ```
@@ -378,9 +348,9 @@ No background removal — the entire image IS the texture.
 ```
 `image --prompt "..." --image path_ref.png -o path_variant.png`
 
-### Item kit (2c Grok for 4 items)
+### Item kit
 
-Generate multiple objects in one image, then slice. Cheaper than generating individually (2¢ total vs 2¢ each).
+Generate multiple objects in one image, then slice. This keeps a single style anchor for the set.
 
 ```
 {item1}, {item2}, {item3}, {item4}. 2x2 grid layout, each item centered in its cell, solid {bg_color} background. {art style}.
@@ -398,14 +368,14 @@ python3 ${GODOGEN_SKILL_DIR}/tools/grid_slice.py path_grid.png \
 
 Then rembg each item if transparency is needed. Supports any grid: `2x2`, `3x3`, `2x4`, etc.
 
-### 3D model reference (7c Gemini 1K) + GLB (30-60c)
+### 3D model reference + GLB (30-60c)
 
-Use Gemini — clean composition and precise prompt following are critical for 3D conversion.
+Use a reviewed reference image — clean composition and precise prompt following are critical for 3D conversion.
 
 ```
 3D model reference of {name}. {description}. 3/4 front elevated camera angle, solid white background, soft diffused studio lighting, matte material finish, single centered subject, no shadows on background. Any windows or glass should be solid tinted (opaque).
 ```
-`image --provider gemini --prompt "..." -o path.png`
+`image --provider codex --prompt "..." -o path.png`
 
 Then: `glb --image ... -o ...` — do NOT remove the background; Tripo3D needs the solid white bg for clean separation.
 
@@ -415,7 +385,7 @@ Key: 3/4 front elevated angle, solid white/gray bg, matte finish (no reflections
 
 Full workflow (ref → pose → video → frames → loop trim → rembg) is in CLI Reference above. Prompt templates:
 
-**Reference (Gemini 1K):** `{name}, {description}. Neutral standing pose, facing right, centered on a solid {bg_color} background. Clean silhouette.`
+**Reference:** `{name}, {description}. Neutral standing pose, facing right, centered on a solid {bg_color} background. Clean silhouette.`
 
 **Pose (per action):** `{action pose description}, side view, solid {bg_color} background.`
 

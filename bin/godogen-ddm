@@ -144,9 +144,6 @@ cmd_check_env() {
     env_status GODOGEN_IMAGE_PROVIDER
     env_status GODOGEN_VIDEO_PROVIDER
     env_status GODOGEN_DREAMINA_BIN
-    env_status GOOGLE_API_KEY
-    env_status XAI_API_KEY
-    env_status OPENAI_API_KEY
     env_status TRIPO3D_API_KEY
 }
 
@@ -434,9 +431,9 @@ text = stdout_path.read_text(errors="replace") if stdout_path.exists() else ""
 
 def redact(text):
     value = str(text)
-    for name in ("OPENAI_API_KEY", "TRIPO3D_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY"):
-        secret = os.environ.get(name)
-        if secret:
+    for name, secret in os.environ.items():
+        upper_name = name.upper()
+        if secret and (upper_name.endswith("_API_KEY") or "TOKEN" in upper_name or "SECRET" in upper_name):
             value = value.replace(secret, "[redacted]")
     value = re.sub(r"sk-[A-Za-z0-9._-]+", "[redacted]", value)
     value = re.sub(r"(?i)(token|session|api[_-]?key)=([^\\s,;]+)", r"\1=[redacted]", value)
@@ -489,8 +486,8 @@ cmd_external_smoke() {
     local missing=0
     local first_frame
     local dreamina_video
-    local openai_video
-    local openai_image
+    local codex_video
+    local codex_image
     local tripo_glb
     local incomplete=0
 
@@ -519,13 +516,14 @@ Usage:
   godogen-ddm external-smoke [--out <dir>] [--poll <seconds>] [--yes-charge]
 
 Default mode is non-paid: it creates a procedural first frame and validates
-Dreamina/OpenAI command construction with dry-runs. Tripo3D has no dry-run
-provider path, so it is skipped unless --yes-charge is supplied.
+Dreamina command construction and Codex task construction with dry-runs.
+Tripo3D has no dry-run provider path, so it is skipped unless --yes-charge is
+supplied.
 
 --yes-charge submits real provider tasks and may consume Dreamina credits,
-OpenAI API billing, and Tripo3D credits. It requires Dreamina CLI availability,
-OPENAI_API_KEY, and TRIPO3D_API_KEY. Provider pending/failed states are
-summarized without echoing raw provider logs or secret values.
+and Tripo3D credits. It requires Dreamina CLI availability and
+TRIPO3D_API_KEY. Provider pending/failed states are summarized without echoing
+raw provider logs or secret values.
 EOF
                 return 0
                 ;;
@@ -543,8 +541,8 @@ EOF
     mkdir -p "$out/assets/img" "$out/assets/video" "$out/assets/glb"
     first_frame="$out/assets/img/external_smoke_first.png"
     dreamina_video="$out/assets/video/dreamina_external_smoke.mp4"
-    openai_video="$out/assets/video/openai_external_smoke.mp4"
-    openai_image="$out/assets/img/openai_external_smoke.png"
+    codex_video="$out/assets/video/codex_external_smoke.mp4"
+    codex_image="$out/assets/img/codex_external_smoke.png"
     tripo_glb="$out/assets/glb/tripo_external_smoke.glb"
 
     "$SELF" asset texture \
@@ -561,34 +559,30 @@ EOF
             -o "$dreamina_video" >/dev/null
 
         "$SELF" asset image \
-            --provider openai --dry-run \
+            --provider codex --dry-run \
             --prompt "external smoke clean top-down stone tile" \
             --aspect-ratio 1:1 \
-            -o "$openai_image" >/dev/null
+            -o "$codex_image" >/dev/null
 
         "$SELF" asset video \
-            --provider openai --dry-run \
+            --provider codex --dry-run \
             --prompt "external smoke camera push across a stone floor" \
             --image "$first_frame" \
             --duration 4 --resolution 720p --poll "$poll" \
-            -o "$openai_video" >/dev/null
+            -o "$codex_video" >/dev/null
 
         printf 'external-smoke: dry-run (%s)\n' "$out"
         printf 'procedural-first-frame: ok %s\n' "$first_frame"
         printf 'dreamina-video: dry-run %s\n' "$dreamina_video"
-        printf 'openai-image: dry-run %s\n' "$openai_image"
-        printf 'openai-video: dry-run %s\n' "$openai_video"
+        printf 'codex-image: dry-run %s\n' "$codex_image"
+        printf 'codex-video: dry-run %s\n' "$codex_video"
         printf 'tripo3d-glb: skipped (no non-paid dry-run path)\n'
-        printf 'Use --yes-charge to submit real Dreamina/OpenAI/Tripo3D provider tasks.\n'
+        printf 'Use --yes-charge to submit real Dreamina/Tripo3D provider tasks.\n'
         return 0
     fi
 
     if ! dreamina_bin_path >/dev/null 2>&1; then
         echo "dreamina=missing" >&2
-        missing=1
-    fi
-    if [ -z "${OPENAI_API_KEY:-}" ]; then
-        echo "OPENAI_API_KEY=missing" >&2
         missing=1
     fi
     if [ -z "${TRIPO3D_API_KEY:-}" ]; then
@@ -606,19 +600,6 @@ EOF
         --image "$first_frame" \
         --duration 4 --resolution 720p --poll "$poll" \
         -o "$dreamina_video" || incomplete=1
-
-    external_smoke_run_asset openai-image "$SELF" asset image \
-        --provider openai \
-        --prompt "external smoke clean top-down stone tile" \
-        --aspect-ratio 1:1 \
-        -o "$openai_image" || incomplete=1
-
-    external_smoke_run_asset openai-video "$SELF" asset video \
-        --provider openai \
-        --prompt "external smoke camera push across a stone floor" \
-        --image "$first_frame" \
-        --duration 4 --resolution 720p --poll "$poll" \
-        -o "$openai_video" || incomplete=1
 
     external_smoke_run_asset tripo3d-glb "$SELF" asset glb \
         --image "$first_frame" \
