@@ -48,6 +48,18 @@ def parse_json_stdout(proc):
 
 
 class AssetGenProviderTests(unittest.TestCase):
+    def test_comfy_profile_loader_reads_ref_image_profile(self):
+        sys.path.insert(0, str(REPO_ROOT / "shared" / "skills" / "godogen" / "tools"))
+        from providers.comfy_profiles import load_profile
+
+        profile = load_profile("ref-image")
+
+        self.assertEqual(profile["id"], "ref-image")
+        self.assertEqual(profile["asset_kind"], "image")
+        self.assertEqual(profile["workflow"], "workflows/ref-image.workflow_api.json")
+        self.assertEqual(profile["inputs"]["prompt"]["node"], "6")
+        self.assertEqual(profile["outputs"][0]["kind"], "image")
+
     def test_procedural_env_provider_generates_png_without_external_sdks(self):
         with tempfile.TemporaryDirectory(prefix="godogen-procedural.") as tmp:
             output = Path(tmp) / "assets" / "img" / "checker.png"

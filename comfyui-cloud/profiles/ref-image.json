@@ -1,0 +1,24 @@
+{
+  "id": "ref-image",
+  "asset_kind": "image",
+  "workflow": "workflows/ref-image.workflow_api.json",
+  "inputs": {
+    "prompt": {
+      "node": "6",
+      "field": "inputs.text"
+    },
+    "seed": {
+      "node": "3",
+      "field": "inputs.seed"
+    }
+  },
+  "outputs": [
+    {
+      "node": "9",
+      "kind": "image",
+      "extensions": [".png"]
+    }
+  ],
+  "timeout_seconds": 600,
+  "paid": true
+}
